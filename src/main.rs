@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, State, DefaultBodyLimit},
     routing::{get, post},
     Router,
 };
@@ -66,6 +66,7 @@ async fn analyze(State(api_key): State<&str>, mut multipart: Multipart) -> &'sta
 }
 
 async fn upload(mut multipart: Multipart) -> () {
+    println!("Upload endpoint hit!");
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
@@ -77,6 +78,8 @@ async fn upload(mut multipart: Multipart) -> () {
 async fn hello_world() -> &'static str {
     "Hello, world!"
 }
+
+const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10;  // 10 MB
 
 #[shuttle_runtime::main]
 async fn main(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> ShuttleAxum {
@@ -98,7 +101,7 @@ async fn main(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> ShuttleA
     // println!("{data}");
     let router = Router::new()
         .route("/", get(hello_world))
-        .route("/upload", post(upload));
+        .route("/upload", post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)));
 
     Ok(router.into())
     // println!("Response: {res:?}");
