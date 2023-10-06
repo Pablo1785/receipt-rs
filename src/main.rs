@@ -1,19 +1,31 @@
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
+use anyhow::anyhow;
 use axum::{
-    extract::{Multipart, State, DefaultBodyLimit},
+    extract::{DefaultBodyLimit, Multipart, State, multipart::MultipartError},
+    response::IntoResponse,
     routing::{get, post},
     Router,
 };
+use base64::{prelude::BASE64_STANDARD, Engine};
+use chrono::{TimeZone, format::Fixed, FixedOffset};
 use reqwest::{
-    header::{CONTENT_LENGTH, CONTENT_TYPE},
-    Client, Request, Response,
+    header::{CONTENT_LENGTH, CONTENT_TYPE, ToStrError},
+    Client, Request, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use shuttle_axum::ShuttleAxum;
-use shuttle_runtime::{self, Error};
+use shuttle_runtime::{self, Error, tracing_subscriber::reload::Error};
 use shuttle_secrets::SecretStore;
+use sqlx::{PgPool, Executor};
+use thiserror::Error;
+
+use tracing::info;
+
+use crate::generated::Root;
+
+mod generated;
 
 #[derive(Serialize, Deserialize)]
 struct AnalyzeRequestBody {
@@ -23,7 +35,7 @@ struct AnalyzeRequestBody {
 const ENDPOINT: &str = "https://receipt-model.cognitiveservices.azure.com/";
 const MODEL_ID: &str = "prebuilt-receipt";
 
-async fn analyze_file(file_bytes: Vec<u8>, api_key: &str, client: Client) -> Response {
+async fn analyze_file(file_string: &str, api_key: &str, client: &Client) -> Result<Response, reqwest::Error> {
     let url = format!(
         "{ENDPOINT}formrecognizer/documentModels/{MODEL_ID}:analyze?api-version=2023-07-31"
     );
@@ -31,22 +43,19 @@ async fn analyze_file(file_bytes: Vec<u8>, api_key: &str, client: Client) -> Res
         .post(url)
         .header(CONTENT_TYPE, "application/json")
         .header("Ocp-Apim-Subscription-Key", api_key)
-        .body(json!({ "base64Source": file_bytes }).to_string())
-        .build()
-        .unwrap();
-    client.execute(req).await.unwrap()
+        .body(json!({ "base64Source": file_string }).to_string())
+        .build()?;
+    client.execute(req).await
 }
 
-async fn get_analysis_results(analysis_id: &str, api_key: &str, client: Client) -> Response {
-    let url = format!("{ENDPOINT}/formrecognizer/documentModels/{MODEL_ID}/analyzeResults/{analysis_id}?api-version=2023-07-31");
+async fn get_analysis_results(url: &str, api_key: &str, client: &Client) -> Result<Response, reqwest::Error> {
     let req = client
         .get(url)
         .header(CONTENT_TYPE, "application/json")
         .header(CONTENT_LENGTH, "0")
         .header("Ocp-Apim-Subscription-Key", api_key)
-        .build()
-        .unwrap();
-    client.execute(req).await.unwrap()
+        .build()?;
+    client.execute(req).await
 }
 
 async fn analyze(State(api_key): State<&str>, mut multipart: Multipart) -> &'static str {
@@ -65,25 +74,115 @@ async fn analyze(State(api_key): State<&str>, mut multipart: Multipart) -> &'sta
     "Hello"
 }
 
-async fn upload(mut multipart: Multipart) -> () {
-    println!("Upload endpoint hit!");
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+// Make our own error that wraps `anyhow::Error`.
+#[derive(Error, Debug)]
+#[error(transparent)]
+enum AppError {
+    #[error(transparent)]
+    Multipart(#[from] MultipartError),
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+    #[error(transparent)]
+    ToStr(#[from] ToStrError),
+    #[error(transparent)]
+    EncodeSlice(#[from] base64::EncodeSliceError),
+    #[error(transparent)]
+    HttpClient(#[from] reqwest::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
+}
 
-        println!("Length of `{}` is {} bytes", name, data.len());
+// Tell axum how to convert `AppError` into a response.
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Something went wrong: {}", self.to_string()),
+        )
+            .into_response()
     }
+}
+
+async fn upload(
+    State(app_state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<(), AppError> {
+    println!("Upload endpoint hit!");
+    if let Some(field) = multipart.next_field().await? {
+        let name = field.name().unwrap_or_default().to_string();
+        let filename = field.file_name().unwrap_or_default().to_string();
+        let data = field.bytes().await?;
+
+        println!(
+            "Length of `{}` (file: {}) is {} bytes",
+            name,
+            filename,
+            data.len()
+        );
+
+        let base64_file = BASE64_STANDARD.encode(data);
+
+        let res = analyze_file(&base64_file, &app_state.azure_form_recognizer_api_key, &app_state.client).await?;
+
+        println!("Analysis Response: {res:?}");
+        if let StatusCode::ACCEPTED = res.status() {
+            let result_url = res.headers().get("Operation-Location")
+                .ok_or(anyhow!("Missing Operation-Location in response header. This should never happen"))?.to_str()?.to_string();
+            println!("Successfully queued image analysis. Result will be available at: {result_url}");
+
+            tokio::spawn(async move {
+                println!("Waiting before asking for results...");
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let res = get_analysis_results(&result_url, &app_state.azure_form_recognizer_api_key, &app_state.client).await;
+                match res {
+                    Ok(success_res) => {
+                        let text = success_res.text().await?;
+                        let data = serde_json::Value::from_str(&text)?;
+                        println!("{data:?}");
+                        Ok::<(), AppError>(())
+                    },
+                    Err(err) => {
+                        println!("{}", err.to_string()); 
+                        Ok(())
+                    }
+                }
+            });
+        }
+    }
+    Ok(())
 }
 
 async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
-const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10;  // 10 MB
+#[derive(Clone)]
+struct AppState {
+    client: Client,
+    azure_form_recognizer_api_key: String,
+}
+
+struct ProductData {
+    product_name: String,
+    merchant_name: String,
+    count: i64,
+    unit_price: f64,
+    paid_at: chrono::DateTime<FixedOffset>,
+}
+
+const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
 
 #[shuttle_runtime::main]
-async fn main(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> ShuttleAxum {
-    let Some(key) = secret_store.get("AZURE_FORM_RECOGNIZER_KEY") else {
+async fn main(
+    #[shuttle_aws_rds::Postgres] pool: PgPool,
+    #[shuttle_secrets::Secrets] secret_store: SecretStore,
+) -> ShuttleAxum {
+    pool.execute(include_str!("../schema.sql"))
+        .await.map_err(|err| Error::Custom(anyhow!(err)))?;
+
+    let Some(azure_form_recognizer_api_key) = secret_store.get("AZURE_FORM_RECOGNIZER_KEY") else {
         return Err(Error::BuildPanic("Could not find AZURE_FORM_RECOGNIZER_KEY in secrets".into()));
     };
     // let post_req = r#"curl -v -i POST "{endpoint}/formrecognizer/documentModels/{modelID}:analyze?api-version=2023-07-31" -H "Content-Type: application/json" -H "Ocp-Apim-Subscription-Key: {key}" --data-ascii "{'urlSource': '{your-document-url}'}""#;
@@ -95,14 +194,52 @@ async fn main(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> ShuttleA
 
     // let res = analyze_file("../b64file.txt").await;
 
-    // let res = get_analysis_results("518579fc-847d-4744-9d3b-f7b8114420a3").await;
-    // let response_bytes = tokio::fs::read("response.txt").await.unwrap();
-    // let data = serde_json::Value::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
-    // println!("{data}");
+    // let res = get_analysis_results("https://receipt-model.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-receipt/analyzeResults/e4f52411-cc8e-491d-bbfe-78d4d690749f?api-version=2023-07-31", &azure_form_recognizer_api_key, &Client::new()).await.unwrap().text().await.unwrap();
+    let response_bytes = tokio::fs::read("response.json").await.unwrap();
+    // let data: Root = serde_json::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
+    let data: Value =  serde_json::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
+    let item_prices = get_item_prices(data);
+    // let item_prices = data.analyze_result.documents.first().unwrap().fields.items.value_array.iter().map(|obj| (obj.value_object.description.content.clone(), obj.value_object.total_price.value_number)).collect::<Vec<(String, f64)>>();
+    println!("{item_prices:?}");
+    let client = Client::new();
+
+    let app_state = AppState {
+        client,
+        azure_form_recognizer_api_key,
+    };
+
     let router = Router::new()
         .route("/", get(hello_world))
-        .route("/upload", post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)));
+        .route(
+            "/upload",
+            post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
+        )
+        .with_state(Arc::new(app_state));
 
     Ok(router.into())
     // println!("Response: {res:?}");
+}
+
+fn get_item_prices(val: Value) -> anyhow::Result<Vec<(String, i64, f64)>> {
+    // let item_prices = data.analyze_result.documents.first().unwrap().fields.items.value_array.iter().map(|obj| (obj.value_object.description.content.clone(), obj.value_object.total_price.value_number)).collect::<Vec<(String, f64)>>();
+    val.get("analyzeResult").ok_or(anyhow!("Missing analyzeResult"))?
+        .get("documents").ok_or(anyhow!("Missing documents"))?
+        .as_array().ok_or(anyhow!("documents not an array"))?.first().ok_or(anyhow!("Empty documents"))?
+        .get("fields").ok_or(anyhow!("Missing fields"))?
+        .get("Items").ok_or(anyhow!("Missing Items"))?
+        .get("valueArray").ok_or(anyhow!("Missing valueArray"))?
+        .as_array().ok_or(anyhow!("valueArray not an array"))?.iter().map(get_item_price_from_value_obj)
+        .collect()
+}
+
+fn get_item_price_from_value_obj(obj: &Value) -> anyhow::Result<(String, i64, f64)> {
+    let value_obj = obj.get("valueObject").ok_or(anyhow!("Missing valueObject"))?;
+    let name = value_obj.get("Description").ok_or(anyhow!("Missing Description"))?.get("content").ok_or(anyhow!("Missing content"))?.as_str().ok_or(anyhow!("content not a string"))?;
+    if let Some(quantity) = value_obj.get("Quantity").and_then(|v| v.as_i64()) {
+        let unit_price = value_obj.get("UnitPrice").ok_or(anyhow!("Missing UnitPrice"))?.get("valueNumber").ok_or(anyhow!("Missing valueNumber"))?.as_f64().ok_or(anyhow!("UnitPrice not a float64"))?;
+        Ok((name.to_string(), quantity, unit_price))
+    } else {
+        let total_price = value_obj.get("TotalPrice").ok_or(anyhow!("Missing TotalPrice"))?.get("valueNumber").ok_or(anyhow!("Missing valueNumber"))?.as_f64().ok_or(anyhow!("TotalPrice not a float64"))?;
+        Ok((name.to_string(), 1, total_price))
+    }
 }
