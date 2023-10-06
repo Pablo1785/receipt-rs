@@ -1,3 +1,4 @@
+use chrono::{TimeZone, FixedOffset};
 use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
@@ -9,6 +10,7 @@ use axum::{
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
 
+use chrono_tz::Europe::Copenhagen;
 use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
@@ -19,7 +21,7 @@ use serde_json::{json, Value};
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
-use sqlx::{Executor, PgPool};
+use sqlx::{Executor, PgPool, Row};
 use thiserror::Error;
 
 mod generated;
@@ -98,6 +100,8 @@ enum AppError {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    #[error(transparent)]
+    ChronoParse(#[from] chrono::ParseError),
 }
 
 // Tell axum how to convert `AppError` into a response.
@@ -254,7 +258,7 @@ async fn save_analysis_data(
     pool: &PgPool,
     analysis_result: AnalyzeResultOperation,
 ) -> Result<(), AppError> {
-    let _products = analysis_result
+    let receipt_fields = analysis_result
         .analyzeResult
         .ok_or(anyhow!("Missing analyzeResult field"))?
         .documents
@@ -262,6 +266,8 @@ async fn save_analysis_data(
         .first()
         .ok_or(anyhow!("Documents field is present but empty"))?
         .fields
+        .clone();
+    let _products = receipt_fields
         .items
         .value_array
         .iter()
@@ -277,23 +283,58 @@ async fn save_analysis_data(
         .into_iter()
         .take(BIND_LIMIT)
         .collect::<Vec<_>>();
+
+    let datetime_str = receipt_fields.transaction_date.value_date
+        + " "
+        + &receipt_fields.transaction_time.value_time;
+    let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H-%M-%S")?;
+    let chrono::LocalResult::Single(timestamp_tz) = Copenhagen.from_local_datetime(&timestamp)
+    else {
+        return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
+    };
+
+    let merchant_name = &receipt_fields.merchant_name.value_string;
+
+    insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
+
     insert_products_if_not_exist(pool, todo!())
         .await
         .map_err(AppError::from)
 }
+
+async fn insert_prices_for_products_and_receipt(
+    pool: &PgPool,
+    counts: &[f64],
+    unit_prices: &[f64],
+    product_names: &[String],
+    receipt_id: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp"#,
+        counts,
+        unit_prices,
+        receipt_id,
+        product_names
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 
 async fn insert_receipt_if_not_exists(
     pool: &PgPool,
     merchant_name: &str,
     paid_at: chrono::DateTime<chrono_tz::Tz>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2)"#,
+    let row = sqlx::query!(
+        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2) RETURNING id"#,
         merchant_name,
         paid_at
     )
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
+
     Ok(())
 }
 
@@ -366,10 +407,7 @@ mod tests {
 
     #[test]
     fn parse_receipt_analysis_results() {
-        let parse_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!(
-            "../response.json"
-        ));
-        println!("{parse_result:?}");
-        assert!(parse_result.is_ok());
+        serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"))
+            .unwrap();
     }
 }

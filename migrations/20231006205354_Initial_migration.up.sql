@@ -15,7 +15,7 @@ CREATE TABLE receipts (
 CREATE TABLE prices (
     product_id int not null,
     receipt_id int not null,
-    count int not null,
+    count float not null,
     unit_price float not null,
     foreign key (product_id) references products (id),
     foreign key (receipt_id) references receipts (id),
