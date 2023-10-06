@@ -1,5 +1,4 @@
-use serde_derive::{Serialize, Deserialize};
-
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -212,7 +211,6 @@ pub struct Amount {
 pub struct ValueCurrency {
     pub amount: f64,
 }
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

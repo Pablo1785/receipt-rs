@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
 use axum::{
@@ -13,23 +8,19 @@ use axum::{
     Router,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
-use chrono::{format::Fixed, FixedOffset, TimeZone};
+
 use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
-    Client, Request, Response, StatusCode,
+    Client, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
-use sqlx::{Execute, Executor, PgPool};
+use sqlx::{Executor, PgPool};
 use thiserror::Error;
-
-use tracing::info;
-
-use crate::generated::Root;
 
 mod generated;
 mod manual;
@@ -73,10 +64,10 @@ async fn get_analysis_results(
     client.execute(req).await
 }
 
-async fn analyze(State(api_key): State<&str>, mut multipart: Multipart) -> &'static str {
-    let file_bytes = multipart.next_field();
+async fn analyze(State(_api_key): State<&str>, mut multipart: Multipart) -> &'static str {
+    let _file_bytes = multipart.next_field();
 
-    let client = Client::new();
+    let _client = Client::new();
 
     // analyze_file(file_bytes, api_key, client).await;
 
@@ -208,7 +199,8 @@ async fn main(
     #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
 ) -> ShuttleAxum {
-    sqlx::migrate!().run(&pool)
+    sqlx::migrate!()
+        .run(&pool)
         .await
         .map_err(anyhow::Error::from)?;
 
@@ -262,7 +254,7 @@ async fn save_analysis_data(
     pool: &PgPool,
     analysis_result: AnalyzeResultOperation,
 ) -> Result<(), AppError> {
-    let mut products = analysis_result
+    let _products = analysis_result
         .analyzeResult
         .ok_or(anyhow!("Missing analyzeResult field"))?
         .documents
@@ -276,7 +268,10 @@ async fn save_analysis_data(
         .map(|item| {
             let name = item.value_object.description.value_string.clone();
             let count = item.value_object.quantity.unwrap_or(1.0);
-            let unit_price = item.value_object.unit_price.unwrap_or(item.value_object.total_price.value_number);
+            let unit_price = item
+                .value_object
+                .unit_price
+                .unwrap_or(item.value_object.total_price.value_number);
             (name, count, unit_price)
         })
         .into_iter()
@@ -287,8 +282,18 @@ async fn save_analysis_data(
         .map_err(AppError::from)
 }
 
-async fn insert_receipt_if_not_exists(pool: &PgPool, merchant_name: &str, paid_at: chrono::DateTime<chrono_tz::Tz>) -> Result<(), sqlx::Error> {
-    sqlx::query!(r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2)"#, merchant_name, paid_at).execute(pool).await?;
+async fn insert_receipt_if_not_exists(
+    pool: &PgPool,
+    merchant_name: &str,
+    paid_at: chrono::DateTime<chrono_tz::Tz>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2)"#,
+        merchant_name,
+        paid_at
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -361,7 +366,9 @@ mod tests {
 
     #[test]
     fn parse_receipt_analysis_results() {
-        let parse_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"));
+        let parse_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!(
+            "../response.json"
+        ));
         println!("{parse_result:?}");
         assert!(parse_result.is_ok());
     }

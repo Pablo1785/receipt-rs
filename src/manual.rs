@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::FixedOffset;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -443,7 +442,6 @@ pub struct Description {
     pub spans: Vec<Span>,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Span {
@@ -463,10 +461,6 @@ pub struct TotalPrice {
     pub spans: Vec<Span>,
 }
 
-
-
-
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MerchantName {
@@ -478,8 +472,6 @@ pub struct MerchantName {
     pub confidence: f64,
     pub spans: Vec<Span>,
 }
-
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -526,10 +518,6 @@ pub struct ValueCurrency {
     pub amount: f64,
 }
 
-
-
-
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Total {
@@ -541,8 +529,6 @@ pub struct Total {
     pub confidence: f64,
     pub spans: Vec<Span>,
 }
-
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -556,8 +542,6 @@ pub struct TotalTax {
     pub spans: Vec<Span>,
 }
 
-
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionDate {
@@ -569,8 +553,6 @@ pub struct TransactionDate {
     pub confidence: f64,
     pub spans: Vec<Span>,
 }
-
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -590,4 +572,3 @@ pub struct BoundingRegion {
     pub page_number: i64,
     pub polygon: Vec<i64>,
 }
-
