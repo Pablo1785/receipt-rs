@@ -1,4 +1,9 @@
-use std::{collections::{HashMap, HashSet}, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::anyhow;
 use axum::{
@@ -9,6 +14,7 @@ use axum::{
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
 use chrono::{format::Fixed, FixedOffset, TimeZone};
+use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
     Client, Request, Response, StatusCode,
@@ -166,8 +172,8 @@ async fn upload(
                 match res {
                     Ok(success_res) => {
                         let text = success_res.text().await?;
-                        let data = serde_json::Value::from_str(&text)?;
-                        println!("{data:?}");
+                        let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
+                        save_analysis_data(&app_state.pool, data).await?;
                         Ok::<(), AppError>(())
                     }
                     Err(err) => {
@@ -189,14 +195,7 @@ async fn hello_world() -> &'static str {
 struct AppState {
     client: Client,
     azure_form_recognizer_api_key: String,
-}
-
-struct ProductData {
-    product_name: String,
-    merchant_name: String,
-    count: i64,
-    unit_price: f64,
-    paid_at: chrono::DateTime<FixedOffset>,
+    pool: PgPool,
 }
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
@@ -209,6 +208,9 @@ async fn main(
     #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
 ) -> ShuttleAxum {
+    sqlx::migrate!().run(&pool)
+        .await
+        .map_err(anyhow::Error::from)?;
 
     let Some(azure_form_recognizer_api_key) = secret_store.get("AZURE_FORM_RECOGNIZER_KEY") else {
         return Err(shuttle_runtime::Error::BuildPanic(
@@ -233,48 +235,15 @@ async fn main(
     // println!("{item_prices:?}");
 
     // let json = json!({"MerchantName": "abcdefg"});
-    let receipt: manual::AnalyzeResultOperation =
-        serde_json::from_str(include_str!("../response.json")).unwrap();
-    println!("Receipt OK: {receipt:?}");
+
     // println!("Products OK: {products:?}");
-
-    let products = receipt
-            .analyzeResult
-            .unwrap()
-            .documents
-            .unwrap()
-            .first()
-            .unwrap()
-            .fields
-            .items
-            .value_array
-            .iter()
-            .map(|item| item.value_object.description.value_string.clone())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .take(BIND_LIMIT)
-            .collect::<Vec<_>>();
-
-    let query = sqlx::query!(r#"INSERT INTO products(name) SELECT UNNEST($1::text[])"#, &products);
-
-    let sql = query.sql();
-    // let arguments = query.take_arguments().unwrap();
-    println!("{sql}");
-
-    query.execute(&pool).await.unwrap();
-
-    let row: Vec<_> = sqlx::query!("SELECT name FROM products")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
-
-    println!("ROW: {row:?}");
 
     let client = Client::new();
 
     let app_state = AppState {
         client,
         azure_form_recognizer_api_key,
+        pool,
     };
 
     let router = Router::new()
@@ -287,6 +256,48 @@ async fn main(
 
     Ok(router.into())
     // println!("Response: {res:?}");
+}
+
+async fn save_analysis_data(
+    pool: &PgPool,
+    analysis_result: AnalyzeResultOperation,
+) -> Result<(), AppError> {
+    let mut products = analysis_result
+        .analyzeResult
+        .ok_or(anyhow!("Missing analyzeResult field"))?
+        .documents
+        .ok_or(anyhow!("Missing documents field"))?
+        .first()
+        .ok_or(anyhow!("Documents field is present but empty"))?
+        .fields
+        .items
+        .value_array
+        .iter()
+        .map(|item| {
+            let name = item.value_object.description.value_string.clone();
+            let count = item.value_object.quantity.unwrap_or(1.0);
+            let unit_price = item.value_object.unit_price.unwrap_or(item.value_object.total_price.value_number);
+            (name, count, unit_price)
+        })
+        .into_iter()
+        .take(BIND_LIMIT)
+        .collect::<Vec<_>>();
+    insert_products_if_not_exist(pool, todo!())
+        .await
+        .map_err(AppError::from)
+}
+
+async fn insert_receipt_if_not_exists(pool: &PgPool, merchant_name: &str, paid_at: chrono::DateTime<chrono_tz::Tz>) -> Result<(), sqlx::Error> {
+    sqlx::query!(r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2)"#, merchant_name, paid_at).execute(pool).await?;
+    Ok(())
+}
+
+async fn insert_products_if_not_exist(
+    pool: &PgPool,
+    products: &[String],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(r#"INSERT INTO products(name) SELECT new_name FROM (SELECT UNNEST($1::text[]):: text new_name) tmp WHERE new_name NOT IN (SELECT DISTINCT name FROM products)"#, products).execute(pool).await?;
+    Ok(())
 }
 
 fn get_item_prices(val: Value) -> anyhow::Result<Vec<(String, i64, f64)>> {
@@ -341,5 +352,17 @@ fn get_item_price_from_value_obj(obj: &Value) -> anyhow::Result<(String, i64, f6
             .as_f64()
             .ok_or(anyhow!("TotalPrice not a float64"))?;
         Ok((name.to_string(), 1, total_price))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::manual;
+
+    #[test]
+    fn parse_receipt_analysis_results() {
+        let parse_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"));
+        println!("{parse_result:?}");
+        assert!(parse_result.is_ok());
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::FixedOffset;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -271,8 +272,8 @@ pub struct AnalyzeResult {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnalyzeResultOperation {
     pub status: String,
-    pub createdDateTime: String,
-    pub lastUpdatedDateTime: String,
+    pub createdDateTime: chrono::DateTime<chrono::FixedOffset>,
+    pub lastUpdatedDateTime: chrono::DateTime<chrono::FixedOffset>,
     pub error: Option<serde_json::Value>, // Represents a dynamic JSON structure for Error type
     pub analyzeResult: Option<AnalyzeResult>, // Represents a dynamic JSON structure for AnalyzeResult type
 }
@@ -282,8 +283,8 @@ pub struct DocumentField {
     #[serde(rename = "type")]
     pub field_type: DocumentFieldType,
     pub value_string: Option<String>,
-    pub value_date: Option<String>, // Should be parsed to a DateTime type in Rust
-    pub value_time: Option<String>, // Should be parsed to a DateTime type in Rust
+    pub value_date: Option<chrono::DateTime<chrono::FixedOffset>>, // Should be parsed to a DateTime type in Rust
+    pub value_time: Option<chrono::DateTime<chrono::FixedOffset>>, // Should be parsed to a DateTime type in Rust
     pub value_phone_number: Option<String>,
     pub value_number: Option<f64>,
     pub value_integer: Option<i64>,
@@ -562,7 +563,7 @@ pub struct TotalTax {
 pub struct TransactionDate {
     #[serde(rename = "type")]
     pub type_field: String,
-    pub value_date: String,
+    pub value_date: chrono::DateTime<chrono::FixedOffset>,
     pub content: String,
     pub bounding_regions: Vec<BoundingRegion>,
     pub confidence: f64,
@@ -576,7 +577,7 @@ pub struct TransactionDate {
 pub struct TransactionTime {
     #[serde(rename = "type")]
     pub type_field: String,
-    pub value_time: String,
+    pub value_time: chrono::DateTime<chrono::FixedOffset>,
     pub content: String,
     pub bounding_regions: Vec<BoundingRegion>,
     pub confidence: f64,
