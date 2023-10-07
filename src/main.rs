@@ -169,6 +169,7 @@ async fn upload(
                         let text = success_res.text().await?;
                         let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
                         save_analysis_data(&app_state.pool, data).await?;
+                        println!("Successfully saved receipt data");
                         Ok::<(), AppError>(())
                     }
                     Err(err) => {
@@ -180,6 +181,21 @@ async fn upload(
         }
     }
     Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+struct AllData {
+    name: String,
+    unit_price: f64,
+    count: f64,
+    merchant_name: String,
+    paid_at: chrono::DateTime<chrono::Utc>
+}
+
+async fn show_all(State(app_state): State<Arc<AppState>>) -> Result<axum::Json<Vec<AllData>>, AppError> {
+    let pool = &app_state.pool;
+    let data = sqlx::query_as!(AllData, "SELECT receipts.paid_at, receipts.merchant_name, prices.count, prices.unit_price, products.name FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(pool).await?;
+    Ok(axum::Json(data))
 }
 
 async fn hello_world() -> &'static str {
@@ -249,6 +265,7 @@ async fn main(
 
     let router = Router::new()
         .route("/", get(hello_world))
+        .route("/all", get(show_all))
         .route(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
@@ -302,7 +319,6 @@ async fn save_analysis_data(
 
     let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
 
-    println!("Success receipt insert");
     insert_products_if_not_exist(pool, &product_names)
         .await
         .map_err(AppError::from)?;
