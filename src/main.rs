@@ -1,4 +1,5 @@
 use chrono::{FixedOffset, TimeZone};
+use shuttle_persist::{PersistError, PersistInstance};
 use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
@@ -24,7 +25,6 @@ use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool, Row};
 use thiserror::Error;
 
-mod generated;
 mod manual;
 
 #[derive(Serialize, Deserialize)]
@@ -66,22 +66,6 @@ async fn get_analysis_results(
     client.execute(req).await
 }
 
-async fn analyze(State(_api_key): State<&str>, mut multipart: Multipart) -> &'static str {
-    let _file_bytes = multipart.next_field();
-
-    let _client = Client::new();
-
-    // analyze_file(file_bytes, api_key, client).await;
-
-    // tokio::spawn(async {
-    //         tokio::time::sleep(Duration::from_secs(30)).await;
-    //         get_analysis_results(analysis_id, api_key, client).await;
-    //     }
-    // );
-
-    "Hello"
-}
-
 // Make our own error that wraps `anyhow::Error`.
 #[derive(Error, Debug)]
 #[error(transparent)]
@@ -102,6 +86,8 @@ enum AppError {
     Sqlx(#[from] sqlx::Error),
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
+    #[error(transparent)]
+    ShuttlePersist(#[from] PersistError),
 }
 
 // Tell axum how to convert `AppError` into a response.
@@ -116,13 +102,16 @@ impl IntoResponse for AppError {
 }
 
 async fn process_analysis_results(
+    file_hash: &str,
     res: reqwest::Response,
     app_state: Arc<AppState>,
 ) -> Result<(), AppError> {
     let text = res.text().await?;
+    app_state.persist.save(file_hash, &text)?;
+    tracing::info!("Successfully cached raw response text in KV storage. Processing further...");
     let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
     save_analysis_data(&app_state.pool, data).await?;
-    tracing::info!("Successfully saved receipt data");
+    tracing::info!("Successfully saved receipt data in database");
     Ok::<(), AppError>(())
 }
 
@@ -130,29 +119,35 @@ async fn upload(
     State(app_state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<(), AppError> {
-    tracing::info!("Upload endpoint hit!");
     if let Some(field) = multipart.next_field().await? {
-        let name = field.name().unwrap_or_default().to_string();
-        let filename = field.file_name().unwrap_or_default().to_string();
         let data = field.bytes().await?;
 
-        tracing::info!(
-            "Length of `{}` (file: {}) is {} bytes",
-            name,
-            filename,
-            data.len()
-        );
+        let file_hash = sha256::digest(data.as_ref());
+
+        let is_already_analyzed = app_state
+            .persist
+            .list()?
+            .into_iter()
+            .find(|hash| &file_hash == hash)
+            .is_some();
+
+        if is_already_analyzed {
+            return Err(AppError::Anyhow(anyhow!(
+                "Submitted file's hash is already saved in the KV store. Not runnning analysis."
+            )));
+        }
 
         let base64_file = BASE64_STANDARD.encode(data);
 
+        tracing::info!("New file detected, starting analysis...");
         let res = analyze_file(
             &base64_file,
             &app_state.azure_form_recognizer_api_key,
             &app_state.client,
         )
         .await?;
+        tracing::info!("Successfully received response from analysis API. Processing...");
 
-        tracing::info!("Analysis Response: {res:?}");
         if let StatusCode::ACCEPTED = res.status() {
             let result_url = res
                 .headers()
@@ -179,7 +174,7 @@ async fn upload(
                 tracing::info!("Received response from API. Processing...");
                 let process_res = match res {
                     Ok(success_res) => {
-                        process_analysis_results(success_res, app_state.clone()).await
+                        process_analysis_results(&file_hash, success_res, app_state.clone()).await
                     }
                     Err(err) => Err(err.into()),
                 };
@@ -224,6 +219,7 @@ struct AppState {
     azure_form_recognizer_api_key: String,
     pool: PgPool,
     client_secret: String,
+    persist: PersistInstance,
 }
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
@@ -233,6 +229,7 @@ const BIND_LIMIT: usize = 65535;
 
 #[shuttle_runtime::main]
 async fn main(
+    #[shuttle_persist::Persist] persist: PersistInstance,
     #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
 ) -> ShuttleAxum {
@@ -252,32 +249,7 @@ async fn main(
             "Could not find CLIENT_SECRET in secrets".into(),
         ));
     };
-    // let post_req = r#"curl -v -i POST "{endpoint}/formrecognizer/documentModels/{modelID}:analyze?api-version=2023-07-31" -H "Content-Type: application/json" -H "Ocp-Apim-Subscription-Key: {key}" --data-ascii "{'urlSource': '{your-document-url}'}""#;
 
-    // let file_bytes = include_str!("../b64file.txt");
-    // let url = format!("{ENDPOINT}/formrecognizer/documentModels/{MODEL_ID}:analyze?api-version=2023-07-31");
-    // let client = Client::new();
-    // let req = client.post(url).header(CONTENT_TYPE, "application/json").header("Ocp-Apim-Subscription-Key", api_key).body(json!({ "base64Source": file_bytes }).to_string()).build().unwrap();
-
-    // let res = analyze_file("../b64file.txt").await;
-
-    // let res = get_analysis_results("https://receipt-model.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-receipt/analyzeResults/e4f52411-cc8e-491d-bbfe-78d4d690749f?api-version=2023-07-31", &azure_form_recognizer_api_key, &Client::new()).await.unwrap().text().await.unwrap();
-    // let response_bytes = tokio::fs::read("response.json").await.unwrap();
-    // let data: Root = serde_json::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
-    // let data: Value = serde_json::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
-    // let item_prices = get_item_prices(data);
-    // let item_prices = data.analyze_result.documents.first().unwrap().fields.items.value_array.iter().map(|obj| (obj.value_object.description.content.clone(), obj.value_object.total_price.value_number)).collect::<Vec<(String, f64)>>();
-    // tracing::info!("{item_prices:?}");
-
-    // let json = json!({"MerchantName": "abcdefg"});
-
-    // tracing::info!("Products OK: {products:?}");
-    // let analysis_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"))
-    // .unwrap();
-    // save_analysis_data(&pool, analysis_result).await.unwrap();
-
-    // let data = sqlx::query!("SELECT receipts.paid_at, receipts.merchant_name, prices.*, products.* FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(&pool).await.unwrap();
-    // tracing::info!("ROWS: {data:?}");
     let client = Client::new();
 
     let app_state = AppState {
@@ -285,6 +257,7 @@ async fn main(
         azure_form_recognizer_api_key,
         pool,
         client_secret,
+        persist,
     };
 
     let state = Arc::new(app_state);
@@ -314,11 +287,7 @@ async fn auth<B>(
     if app_state.client_secret != bearer.token() {
         return Err(StatusCode::FORBIDDEN);
     }
-
     let response = next.run(request).await;
-
-    // do something with `response`...
-
     Ok(response)
 }
 
@@ -417,61 +386,6 @@ async fn insert_products_if_not_exist(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(r#"INSERT INTO products(name) SELECT DISTINCT new_name FROM (SELECT UNNEST($1::text[]):: text new_name) tmp WHERE new_name NOT IN (SELECT DISTINCT name FROM products)"#, products).execute(pool).await?;
     Ok(())
-}
-
-fn get_item_prices(val: Value) -> anyhow::Result<Vec<(String, i64, f64)>> {
-    // let item_prices = data.analyze_result.documents.first().unwrap().fields.items.value_array.iter().map(|obj| (obj.value_object.description.content.clone(), obj.value_object.total_price.value_number)).collect::<Vec<(String, f64)>>();
-    val.get("analyzeResult")
-        .ok_or(anyhow!("Missing analyzeResult"))?
-        .get("documents")
-        .ok_or(anyhow!("Missing documents"))?
-        .as_array()
-        .ok_or(anyhow!("documents not an array"))?
-        .first()
-        .ok_or(anyhow!("Empty documents"))?
-        .get("fields")
-        .ok_or(anyhow!("Missing fields"))?
-        .get("Items")
-        .ok_or(anyhow!("Missing Items"))?
-        .get("valueArray")
-        .ok_or(anyhow!("Missing valueArray"))?
-        .as_array()
-        .ok_or(anyhow!("valueArray not an array"))?
-        .iter()
-        .map(get_item_price_from_value_obj)
-        .collect()
-}
-
-fn get_item_price_from_value_obj(obj: &Value) -> anyhow::Result<(String, i64, f64)> {
-    let value_obj = obj
-        .get("valueObject")
-        .ok_or(anyhow!("Missing valueObject"))?;
-    let name = value_obj
-        .get("Description")
-        .ok_or(anyhow!("Missing Description"))?
-        .get("content")
-        .ok_or(anyhow!("Missing content"))?
-        .as_str()
-        .ok_or(anyhow!("content not a string"))?;
-    if let Some(quantity) = value_obj.get("Quantity").and_then(|v| v.as_i64()) {
-        let unit_price = value_obj
-            .get("UnitPrice")
-            .ok_or(anyhow!("Missing UnitPrice"))?
-            .get("valueNumber")
-            .ok_or(anyhow!("Missing valueNumber"))?
-            .as_f64()
-            .ok_or(anyhow!("UnitPrice not a float64"))?;
-        Ok((name.to_string(), quantity, unit_price))
-    } else {
-        let total_price = value_obj
-            .get("TotalPrice")
-            .ok_or(anyhow!("Missing TotalPrice"))?
-            .get("valueNumber")
-            .ok_or(anyhow!("Missing valueNumber"))?
-            .as_f64()
-            .ok_or(anyhow!("TotalPrice not a float64"))?;
-        Ok((name.to_string(), 1, total_price))
-    }
 }
 
 #[cfg(test)]
