@@ -380,17 +380,17 @@ pub struct Receipt {
     #[serde(rename = "Items")]
     pub items: Items,
     #[serde(rename = "MerchantName")]
-    pub merchant_name: MerchantName,
+    pub merchant_name: StringObject,
     #[serde(rename = "TaxDetails")]
     pub tax_details: TaxDetails,
     #[serde(rename = "Total")]
-    pub total: Total,
+    pub total: NumberObject,
     #[serde(rename = "TotalTax")]
-    pub total_tax: TotalTax,
+    pub total_tax: NumberObject,
     #[serde(rename = "TransactionDate")]
-    pub transaction_date: TransactionDate,
+    pub transaction_date: DateObject,
     #[serde(rename = "TransactionTime")]
-    pub transaction_time: TransactionTime,
+    pub transaction_time: TimeObject,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -417,22 +417,22 @@ pub struct ValueArray {
 #[serde(rename_all = "camelCase")]
 pub struct ValueObject {
     #[serde(rename = "Description")]
-    pub description: Description,
+    pub description: StringObject,
     #[serde(rename = "TotalPrice")]
-    pub total_price: TotalPrice,
+    pub total_price: NumberObject,
     #[serde(rename = "Quantity")]
-    pub quantity: Option<f64>,
+    pub quantity: Option<NumberObject>,
     #[serde(rename = "Price")]
-    pub unit_price: Option<f64>,
+    pub unit_price: Option<NumberObject>,
     #[serde(rename = "ProductCode")]
-    pub product_code: Option<String>,
+    pub product_code: Option<StringObject>,
     #[serde(rename = "QuantityUnit")]
-    pub quantity_unit: Option<String>,
+    pub quantity_unit: Option<StringObject>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Description {
+pub struct StringObject {
     #[serde(rename = "type")]
     pub type_field: String,
     pub value_string: String,
@@ -451,22 +451,10 @@ pub struct Span {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TotalPrice {
+pub struct NumberObject {
     #[serde(rename = "type")]
     pub type_field: String,
     pub value_number: f64,
-    pub content: String,
-    pub bounding_regions: Vec<BoundingRegion>,
-    pub confidence: f64,
-    pub spans: Vec<Span>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MerchantName {
-    #[serde(rename = "type")]
-    pub type_field: String,
-    pub value_string: String,
     pub content: String,
     pub bounding_regions: Vec<BoundingRegion>,
     pub confidence: f64,
@@ -520,31 +508,7 @@ pub struct ValueCurrency {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Total {
-    #[serde(rename = "type")]
-    pub type_field: String,
-    pub value_number: f64,
-    pub content: String,
-    pub bounding_regions: Vec<BoundingRegion>,
-    pub confidence: f64,
-    pub spans: Vec<Span>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TotalTax {
-    #[serde(rename = "type")]
-    pub type_field: String,
-    pub value_number: f64,
-    pub content: String,
-    pub bounding_regions: Vec<BoundingRegion>,
-    pub confidence: f64,
-    pub spans: Vec<Span>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionDate {
+pub struct DateObject {
     #[serde(rename = "type")]
     pub type_field: String,
     pub value_date: String,
@@ -556,7 +520,7 @@ pub struct TransactionDate {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TransactionTime {
+pub struct TimeObject {
     #[serde(rename = "type")]
     pub type_field: String,
     pub value_time: String,

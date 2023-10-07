@@ -157,10 +157,10 @@ async fn upload(
                 ))?
                 .to_str()?
                 .to_string();
-            let msg = format!("Successfully queued image analysis. Result will be available at: {result_url}");
-            tracing::info!(
-                msg
+            let msg = format!(
+                "Successfully queued image analysis. Result will be available at: {result_url}"
             );
+            tracing::info!(msg);
 
             tokio::spawn(async move {
                 tracing::info!("Waiting before asking for results...");
@@ -191,7 +191,8 @@ async fn upload(
             Ok(msg)
         } else {
             Err(AppError::Anyhow(anyhow!(
-                "Analysis API responded with an error status code {}", res.status()
+                "Analysis API responded with an error status code {}",
+                res.status()
             )))
         }
     } else {
@@ -323,11 +324,16 @@ async fn save_analysis_data(
         .iter()
         .map(|item| {
             let name = item.value_object.description.value_string.clone();
-            let count = item.value_object.quantity.unwrap_or(1.0);
-            let unit_price = item
-                .value_object
-                .unit_price
-                .unwrap_or(item.value_object.total_price.value_number);
+            let count = if let Some(q) = &item.value_object.quantity {
+                q.value_number
+            } else {
+                1.0
+            };
+            let unit_price = if let Some(up) = &item.value_object.unit_price {
+                up.value_number
+            } else {
+                item.value_object.total_price.value_number
+            };
             (name, (count, unit_price))
         })
         .into_iter()
@@ -407,7 +413,13 @@ mod tests {
 
     #[test]
     fn parse_receipt_analysis_results() {
-        serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"))
+        serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response1.json"))
+            .unwrap();
+    }
+
+    #[test]
+    fn parse_other_receipt_analysis_results() {
+        serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response2.json"))
             .unwrap();
     }
 }
