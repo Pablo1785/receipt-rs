@@ -115,7 +115,10 @@ impl IntoResponse for AppError {
     }
 }
 
-async fn process_analysis_results(res: reqwest::Response, app_state: Arc<AppState>) -> Result<(), AppError> {
+async fn process_analysis_results(
+    res: reqwest::Response,
+    app_state: Arc<AppState>,
+) -> Result<(), AppError> {
     let text = res.text().await?;
     let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
     save_analysis_data(&app_state.pool, data).await?;
@@ -166,18 +169,25 @@ async fn upload(
             tokio::spawn(async move {
                 tracing::info!("Waiting before asking for results...");
                 tokio::time::sleep(Duration::from_secs(30)).await;
+                tracing::info!("Requesting results...");
                 let res = get_analysis_results(
                     &result_url,
                     &app_state.azure_form_recognizer_api_key,
                     &app_state.client,
                 )
                 .await;
+                tracing::info!("Received response from API. Processing...");
                 let process_res = match res {
-                    Ok(success_res) => process_analysis_results(success_res, app_state.clone()).await,
-                    Err(err) => Err(err.into()) 
+                    Ok(success_res) => {
+                        process_analysis_results(success_res, app_state.clone()).await
+                    }
+                    Err(err) => Err(err.into()),
                 };
                 if let Err(err) = process_res {
-                    tracing::error!("Error when processing analysis results: {}", err.to_string());
+                    tracing::error!(
+                        "Error when processing analysis results: {}",
+                        err.to_string()
+                    );
                 } else {
                     tracing::info!("Successfully processed analysis results");
                 }
@@ -300,7 +310,7 @@ async fn auth<B>(
     >,
     request: axum::http::Request<B>,
     next: axum::middleware::Next<B>,
-) -> Result<axum::response::Response, StatusCode>{
+) -> Result<axum::response::Response, StatusCode> {
     if app_state.client_secret != bearer.token() {
         return Err(StatusCode::FORBIDDEN);
     }
