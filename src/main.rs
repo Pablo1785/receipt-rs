@@ -322,19 +322,18 @@ async fn save_analysis_data(
         .items
         .value_array
         .iter()
-        .map(|item| {
+        .filter_map(|item| {
+            let Some(unit_price) = item.value_object.unit_price.as_ref().or(item.value_object.total_price.as_ref()).map(|obj| obj.value_number) else {
+                // We throw away items where no price was detected
+                return None;
+            };
             let name = item.value_object.description.value_string.clone();
             let count = if let Some(q) = &item.value_object.quantity {
                 q.value_number
             } else {
                 1.0
             };
-            let unit_price = if let Some(up) = &item.value_object.unit_price {
-                up.value_number
-            } else {
-                item.value_object.total_price.value_number
-            };
-            (name, (count, unit_price))
+            Some((name, (count, unit_price)))
         })
         .into_iter()
         .take(BIND_LIMIT)
@@ -420,6 +419,12 @@ mod tests {
     #[test]
     fn parse_other_receipt_analysis_results() {
         serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response2.json"))
+            .unwrap();
+    }
+
+    #[test]
+    fn parse_another_receipt_analysis_results() {
+        serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response3.json"))
             .unwrap();
     }
 }

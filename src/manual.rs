@@ -419,7 +419,7 @@ pub struct ValueObject {
     #[serde(rename = "Description")]
     pub description: StringObject,
     #[serde(rename = "TotalPrice")]
-    pub total_price: NumberObject,
+    pub total_price: Option<NumberObject>,
     #[serde(rename = "Quantity")]
     pub quantity: Option<NumberObject>,
     #[serde(rename = "Price")]
