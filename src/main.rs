@@ -226,8 +226,6 @@ async fn main(
     #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
 ) -> ShuttleAxum {
-    tracing_subscriber::fmt::init();
-
     sqlx::migrate!()
         .run(&pool)
         .await
