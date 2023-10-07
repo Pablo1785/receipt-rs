@@ -115,17 +115,25 @@ impl IntoResponse for AppError {
     }
 }
 
+async fn process_analysis_results(res: reqwest::Response, app_state: Arc<AppState>) -> Result<(), AppError> {
+    let text = res.text().await?;
+    let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
+    save_analysis_data(&app_state.pool, data).await?;
+    tracing::info!("Successfully saved receipt data");
+    Ok::<(), AppError>(())
+}
+
 async fn upload(
     State(app_state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Result<(), AppError> {
-    println!("Upload endpoint hit!");
+    tracing::info!("Upload endpoint hit!");
     if let Some(field) = multipart.next_field().await? {
         let name = field.name().unwrap_or_default().to_string();
         let filename = field.file_name().unwrap_or_default().to_string();
         let data = field.bytes().await?;
 
-        println!(
+        tracing::info!(
             "Length of `{}` (file: {}) is {} bytes",
             name,
             filename,
@@ -141,7 +149,7 @@ async fn upload(
         )
         .await?;
 
-        println!("Analysis Response: {res:?}");
+        tracing::info!("Analysis Response: {res:?}");
         if let StatusCode::ACCEPTED = res.status() {
             let result_url = res
                 .headers()
@@ -151,12 +159,12 @@ async fn upload(
                 ))?
                 .to_str()?
                 .to_string();
-            println!(
+            tracing::info!(
                 "Successfully queued image analysis. Result will be available at: {result_url}"
             );
 
             tokio::spawn(async move {
-                println!("Waiting before asking for results...");
+                tracing::info!("Waiting before asking for results...");
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 let res = get_analysis_results(
                     &result_url,
@@ -164,18 +172,14 @@ async fn upload(
                     &app_state.client,
                 )
                 .await;
-                match res {
-                    Ok(success_res) => {
-                        let text = success_res.text().await?;
-                        let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
-                        save_analysis_data(&app_state.pool, data).await?;
-                        println!("Successfully saved receipt data");
-                        Ok::<(), AppError>(())
-                    }
-                    Err(err) => {
-                        println!("{}", err.to_string());
-                        Ok(())
-                    }
+                let process_res = match res {
+                    Ok(success_res) => process_analysis_results(success_res, app_state.clone()).await,
+                    Err(err) => Err(err.into()) 
+                };
+                if let Err(err) = process_res {
+                    tracing::error!("Error when processing analysis results: {}", err.to_string());
+                } else {
+                    tracing::info!("Successfully processed analysis results");
                 }
             });
         }
@@ -222,6 +226,8 @@ async fn main(
     #[shuttle_aws_rds::Postgres] pool: PgPool,
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
 ) -> ShuttleAxum {
+    tracing_subscriber::fmt::init();
+
     sqlx::migrate!()
         .run(&pool)
         .await
@@ -253,17 +259,17 @@ async fn main(
     // let data: Value = serde_json::from_str(&String::from_utf8(response_bytes).unwrap()).unwrap();
     // let item_prices = get_item_prices(data);
     // let item_prices = data.analyze_result.documents.first().unwrap().fields.items.value_array.iter().map(|obj| (obj.value_object.description.content.clone(), obj.value_object.total_price.value_number)).collect::<Vec<(String, f64)>>();
-    // println!("{item_prices:?}");
+    // tracing::info!("{item_prices:?}");
 
     // let json = json!({"MerchantName": "abcdefg"});
 
-    // println!("Products OK: {products:?}");
+    // tracing::info!("Products OK: {products:?}");
     // let analysis_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"))
     // .unwrap();
     // save_analysis_data(&pool, analysis_result).await.unwrap();
 
     // let data = sqlx::query!("SELECT receipts.paid_at, receipts.merchant_name, prices.*, products.* FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(&pool).await.unwrap();
-    // println!("ROWS: {data:?}");
+    // tracing::info!("ROWS: {data:?}");
     let client = Client::new();
 
     let app_state = AppState {
@@ -286,7 +292,7 @@ async fn main(
         .with_state(state);
 
     Ok(router.into())
-    // println!("Response: {res:?}");
+    // tracing::info!("Response: {res:?}");
 }
 
 async fn auth<B>(
