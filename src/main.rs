@@ -233,7 +233,12 @@ async fn main(
     // let json = json!({"MerchantName": "abcdefg"});
 
     // println!("Products OK: {products:?}");
+    // let analysis_result = serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response.json"))
+    // .unwrap();
+    // save_analysis_data(&pool, analysis_result).await.unwrap();
 
+    // let data = sqlx::query!("SELECT receipts.paid_at, receipts.merchant_name, prices.*, products.* FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(&pool).await.unwrap();
+    // println!("ROWS: {data:?}");
     let client = Client::new();
 
     let app_state = AppState {
@@ -267,7 +272,7 @@ async fn save_analysis_data(
         .ok_or(anyhow!("Documents field is present but empty"))?
         .fields
         .clone();
-    let _products = receipt_fields
+    let (product_names, (counts, unit_prices)): (Vec<_>, (Vec<_>, Vec<_>)) = receipt_fields
         .items
         .value_array
         .iter()
@@ -278,16 +283,16 @@ async fn save_analysis_data(
                 .value_object
                 .unit_price
                 .unwrap_or(item.value_object.total_price.value_number);
-            (name, count, unit_price)
+            (name, (count, unit_price))
         })
         .into_iter()
         .take(BIND_LIMIT)
-        .collect::<Vec<_>>();
+        .unzip();
 
     let datetime_str = receipt_fields.transaction_date.value_date
         + " "
         + &receipt_fields.transaction_time.value_time;
-    let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H-%M-%S")?;
+    let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S").map_err(|_| anyhow!(format!("Invalid date string: {datetime_str}")))?;
     let chrono::LocalResult::Single(timestamp_tz) = Copenhagen.from_local_datetime(&timestamp)
     else {
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
@@ -295,11 +300,15 @@ async fn save_analysis_data(
 
     let merchant_name = &receipt_fields.merchant_name.value_string;
 
-    insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
+    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
 
-    insert_products_if_not_exist(pool, todo!())
+    println!("Success receipt insert");
+    insert_products_if_not_exist(pool, &product_names)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+
+    insert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id).await?;
+    Ok(())
 }
 
 async fn insert_prices_for_products_and_receipt(
@@ -310,7 +319,7 @@ async fn insert_prices_for_products_and_receipt(
     receipt_id: i32,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp"#,
+        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp ON CONFLICT DO NOTHING"#,
         counts,
         unit_prices,
         receipt_id,
@@ -321,28 +330,25 @@ async fn insert_prices_for_products_and_receipt(
     Ok(())
 }
 
-
 async fn insert_receipt_if_not_exists(
     pool: &PgPool,
     merchant_name: &str,
     paid_at: chrono::DateTime<chrono_tz::Tz>,
-) -> Result<(), sqlx::Error> {
-    let row = sqlx::query!(
-        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2) RETURNING id"#,
+) -> Result<i32, sqlx::Error> {
+    let res = sqlx::query!(
+        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2) RETURNING *"#,
         merchant_name,
         paid_at
-    )
-    .fetch_one(pool)
-    .await?;
-
-    Ok(())
+    ).fetch_one(pool).await?.id;
+    Ok(res)
+    // row.try_get::<i32, &str>("id")
 }
 
 async fn insert_products_if_not_exist(
     pool: &PgPool,
     products: &[String],
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(r#"INSERT INTO products(name) SELECT new_name FROM (SELECT UNNEST($1::text[]):: text new_name) tmp WHERE new_name NOT IN (SELECT DISTINCT name FROM products)"#, products).execute(pool).await?;
+    sqlx::query!(r#"INSERT INTO products(name) SELECT DISTINCT new_name FROM (SELECT UNNEST($1::text[]):: text new_name) tmp WHERE new_name NOT IN (SELECT DISTINCT name FROM products)"#, products).execute(pool).await?;
     Ok(())
 }
 
