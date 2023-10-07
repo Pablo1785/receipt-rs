@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT receipts.paid_at, receipts.merchant_name, prices.*, products.* FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "paid_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "merchant_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "product_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "receipt_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "count",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "934d7e75a132682f0360fa9ac295dba865470aa0f8d057db05fe1d5e32b7fad9"
+}
