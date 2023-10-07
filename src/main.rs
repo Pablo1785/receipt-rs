@@ -1,4 +1,4 @@
-use chrono::{FixedOffset, TimeZone};
+use chrono::TimeZone;
 use shuttle_persist::{PersistError, PersistInstance};
 use std::{sync::Arc, time::Duration};
 
@@ -18,7 +18,7 @@ use reqwest::{
     Client, Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
@@ -323,7 +323,13 @@ async fn save_analysis_data(
         .value_array
         .iter()
         .filter_map(|item| {
-            let Some(unit_price) = item.value_object.unit_price.as_ref().or(item.value_object.total_price.as_ref()).map(|obj| obj.value_number) else {
+            let Some(unit_price) = item
+                .value_object
+                .unit_price
+                .as_ref()
+                .or(item.value_object.total_price.as_ref())
+                .map(|obj| obj.value_number)
+            else {
                 // We throw away items where no price was detected
                 return None;
             };
