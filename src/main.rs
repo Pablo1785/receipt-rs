@@ -118,7 +118,7 @@ async fn process_analysis_results(
 async fn upload(
     State(app_state): State<Arc<AppState>>,
     mut multipart: Multipart,
-) -> Result<(), AppError> {
+) -> Result<String, AppError> {
     if let Some(field) = multipart.next_field().await? {
         let data = field.bytes().await?;
 
@@ -157,8 +157,9 @@ async fn upload(
                 ))?
                 .to_str()?
                 .to_string();
+            let msg = format!("Successfully queued image analysis. Result will be available at: {result_url}");
             tracing::info!(
-                "Successfully queued image analysis. Result will be available at: {result_url}"
+                msg
             );
 
             tokio::spawn(async move {
@@ -187,9 +188,17 @@ async fn upload(
                     tracing::info!("Successfully processed analysis results");
                 }
             });
+            Ok(msg)
+        } else {
+            Err(AppError::Anyhow(anyhow!(
+                "Analysis API responded with an error status code {}", res.status()
+            )))
         }
+    } else {
+        Err(AppError::Anyhow(anyhow!(
+            "No file was submitted for analysis"
+        )))
     }
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]

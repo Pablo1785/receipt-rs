@@ -2,3 +2,4 @@
 .env
 Secrets*.toml
 *.txt
+.shuttle-storage/
