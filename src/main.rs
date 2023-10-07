@@ -1,4 +1,4 @@
-use chrono::{TimeZone, FixedOffset};
+use chrono::{FixedOffset, TimeZone};
 use std::{sync::Arc, time::Duration};
 
 use anyhow::anyhow;
@@ -189,10 +189,12 @@ struct AllData {
     unit_price: f64,
     count: f64,
     merchant_name: String,
-    paid_at: chrono::DateTime<chrono::Utc>
+    paid_at: chrono::DateTime<chrono::Utc>,
 }
 
-async fn show_all(State(app_state): State<Arc<AppState>>) -> Result<axum::Json<Vec<AllData>>, AppError> {
+async fn show_all(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<axum::Json<Vec<AllData>>, AppError> {
     let pool = &app_state.pool;
     let data = sqlx::query_as!(AllData, "SELECT receipts.paid_at, receipts.merchant_name, prices.count, prices.unit_price, products.name FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(pool).await?;
     Ok(axum::Json(data))
@@ -207,6 +209,7 @@ struct AppState {
     client: Client,
     azure_form_recognizer_api_key: String,
     pool: PgPool,
+    client_secret: String,
 }
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
@@ -227,6 +230,12 @@ async fn main(
     let Some(azure_form_recognizer_api_key) = secret_store.get("AZURE_FORM_RECOGNIZER_KEY") else {
         return Err(shuttle_runtime::Error::BuildPanic(
             "Could not find AZURE_FORM_RECOGNIZER_KEY in secrets".into(),
+        ));
+    };
+
+    let Some(client_secret) = secret_store.get("CLIENT_SECRET") else {
+        return Err(shuttle_runtime::Error::BuildPanic(
+            "Could not find CLIENT_SECRET in secrets".into(),
         ));
     };
     // let post_req = r#"curl -v -i POST "{endpoint}/formrecognizer/documentModels/{modelID}:analyze?api-version=2023-07-31" -H "Content-Type: application/json" -H "Ocp-Apim-Subscription-Key: {key}" --data-ascii "{'urlSource': '{your-document-url}'}""#;
@@ -261,7 +270,10 @@ async fn main(
         client,
         azure_form_recognizer_api_key,
         pool,
+        client_secret,
     };
+
+    let state = Arc::new(app_state);
 
     let router = Router::new()
         .route("/", get(hello_world))
@@ -270,10 +282,30 @@ async fn main(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
         )
-        .with_state(Arc::new(app_state));
+        .layer(axum::middleware::from_fn_with_state(state.clone(), auth))
+        .with_state(state);
 
     Ok(router.into())
     // println!("Response: {res:?}");
+}
+
+async fn auth<B>(
+    State(app_state): State<Arc<AppState>>,
+    axum::TypedHeader(axum::headers::Authorization(bearer)): axum::TypedHeader<
+        axum::headers::Authorization<axum::headers::authorization::Bearer>,
+    >,
+    request: axum::http::Request<B>,
+    next: axum::middleware::Next<B>,
+) -> Result<axum::response::Response, StatusCode>{
+    if app_state.client_secret != bearer.token() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let response = next.run(request).await;
+
+    // do something with `response`...
+
+    Ok(response)
 }
 
 async fn save_analysis_data(
@@ -309,7 +341,8 @@ async fn save_analysis_data(
     let datetime_str = receipt_fields.transaction_date.value_date
         + " "
         + &receipt_fields.transaction_time.value_time;
-    let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S").map_err(|_| anyhow!(format!("Invalid date string: {datetime_str}")))?;
+    let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S")
+        .map_err(|_| anyhow!(format!("Invalid date string: {datetime_str}")))?;
     let chrono::LocalResult::Single(timestamp_tz) = Copenhagen.from_local_datetime(&timestamp)
     else {
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
@@ -323,7 +356,8 @@ async fn save_analysis_data(
         .await
         .map_err(AppError::from)?;
 
-    insert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id).await?;
+    insert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id)
+        .await?;
     Ok(())
 }
 
@@ -355,7 +389,10 @@ async fn insert_receipt_if_not_exists(
         r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2) RETURNING *"#,
         merchant_name,
         paid_at
-    ).fetch_one(pool).await?.id;
+    )
+    .fetch_one(pool)
+    .await?
+    .id;
     Ok(res)
     // row.try_get::<i32, &str>("id")
 }
