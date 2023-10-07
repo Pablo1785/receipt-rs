@@ -259,6 +259,10 @@ async fn main(
         ));
     };
 
+    for k in persist.list().unwrap() {
+        tracing::info!("Stored result: {}", persist.load::<String>(&k).unwrap())
+    }
+
     let client = Client::new();
 
     let app_state = AppState {
