@@ -444,6 +444,8 @@ async fn upsert_prices_for_products_and_receipt(
     receipt_id: i32,
 ) -> Result<(), sqlx::Error> {
     let mut data = product_names.into_iter().zip(counts.into_iter().zip(unit_prices.into_iter())).collect::<Vec<_>>();
+    // TODO: De-duplication means we are losing data points such as multiple discounts with the same name on one receipt; allow multiple entries of a given product on the same receipt
+    data.dedup_by(|(name1, _), (name2, _)| name1 == name2);
     data.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
     let (product_names, (counts, unit_prices)): (Vec<String>, (Vec<f64>, Vec<f64>)) = data.into_iter().unzip();
     sqlx::query!(
