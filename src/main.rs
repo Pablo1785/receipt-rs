@@ -123,7 +123,12 @@ async fn repopulate_db_from_cache(
     sqlx::query!("DELETE FROM prices").execute(pool).await?;
     sqlx::query!("DELETE FROM products").execute(pool).await?;
     sqlx::query!("DELETE FROM receipts").execute(pool).await?;
-    for (file_hash, text) in app_state.persist.list()?.into_iter().map(|k| (k.clone(), app_state.persist.load::<String>(&k))) {
+    for (file_hash, text) in app_state
+        .persist
+        .list()?
+        .into_iter()
+        .map(|k| (k.clone(), app_state.persist.load::<String>(&k)))
+    {
         let data: manual::AnalyzeResultOperation = serde_json::from_str(&text?)?;
         save_analysis_data(&app_state.pool, data, &file_hash).await?;
     }
@@ -418,18 +423,18 @@ async fn save_analysis_data(
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
     };
 
-    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz, file_hash).await?;
+    let receipt_id = upsert_receipt(pool, merchant_name, timestamp_tz, file_hash).await?;
 
     insert_products_if_not_exist(pool, &product_names)
         .await
         .map_err(AppError::from)?;
 
-    insert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id)
+    upsert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id)
         .await?;
     Ok(())
 }
 
-async fn insert_prices_for_products_and_receipt(
+async fn upsert_prices_for_products_and_receipt(
     pool: &PgPool,
     counts: &[f64],
     unit_prices: &[f64],
@@ -437,7 +442,7 @@ async fn insert_prices_for_products_and_receipt(
     receipt_id: i32,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp ON CONFLICT DO NOTHING"#,
+        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
         counts,
         unit_prices,
         receipt_id,
@@ -448,14 +453,14 @@ async fn insert_prices_for_products_and_receipt(
     Ok(())
 }
 
-async fn insert_receipt_if_not_exists(
+async fn upsert_receipt(
     pool: &PgPool,
     merchant_name: &str,
     paid_at: chrono::DateTime<chrono_tz::Tz>,
     file_hash: &str,
 ) -> Result<i32, sqlx::Error> {
     let res = sqlx::query!(
-        r#"INSERT INTO receipts(merchant_name, paid_at, file_sha256) VALUES ($1, $2, $3) RETURNING *"#,
+        r#"INSERT INTO receipts(merchant_name, paid_at, file_sha256) VALUES ($1, $2, $3) ON CONFLICT ON CONSTRAINT unique_paid_at DO UPDATE SET merchant_name=excluded.merchant_name, file_sha256=excluded.file_sha256 RETURNING *"#,
         merchant_name,
         paid_at,
         file_hash
@@ -464,14 +469,18 @@ async fn insert_receipt_if_not_exists(
     .await?
     .id;
     Ok(res)
-    // row.try_get::<i32, &str>("id")
 }
 
 async fn insert_products_if_not_exist(
     pool: &PgPool,
     products: &[String],
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(r#"INSERT INTO products(name) SELECT DISTINCT new_name FROM (SELECT UNNEST($1::text[]):: text new_name) tmp WHERE new_name NOT IN (SELECT DISTINCT name FROM products)"#, products).execute(pool).await?;
+    sqlx::query!(
+        r#"INSERT INTO products(name) SELECT UNNEST($1::text[]) ON CONFLICT DO NOTHING"#,
+        products
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
