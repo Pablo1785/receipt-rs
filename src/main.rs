@@ -12,6 +12,7 @@ use axum::{
 use base64::{prelude::BASE64_STANDARD, Engine};
 
 use chrono_tz::Europe::Copenhagen;
+use itertools::Itertools;
 use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
@@ -24,7 +25,6 @@ use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool, Row};
 use thiserror::Error;
-use itertools::Itertools;
 
 mod manual;
 
@@ -124,16 +124,33 @@ async fn repopulate_db_from_cache(
     sqlx::query!("DELETE FROM prices").execute(pool).await?;
     sqlx::query!("DELETE FROM products").execute(pool).await?;
     sqlx::query!("DELETE FROM receipts").execute(pool).await?;
-    for (file_hash, text) in app_state
-        .persist
-        .list()?
-        .into_iter()
-        .map(|k| (k.clone(), app_state.persist.load::<String>(&k)))
-    {
-        let data: manual::AnalyzeResultOperation = serde_json::from_str(&text?)?;
-        save_analysis_data(&app_state.pool, data, &file_hash).await?;
-    }
     tx.commit().await?;
+
+    for file_hash in app_state.persist.list()? {
+        let app_state_clone = app_state.clone();
+        tokio::spawn(async move {
+            let res = app_state_clone
+                .persist
+                .load::<String>(&file_hash)
+                .map_err(AppError::from)
+                .and_then(|text| serde_json::from_str(&text).map_err(AppError::from));
+            match res {
+                Ok(data) => {
+                    if let Err(err) =
+                        save_analysis_data(&app_state_clone.pool, data, &file_hash).await
+                    {
+                        tracing::error!("{}", err.to_string());
+                    } else {
+                        tracing::info!(
+                            "Successfully saved receipted data in DB for file {}",
+                            file_hash
+                        );
+                    };
+                }
+                Err(err) => tracing::error!("{}", err.to_string()),
+            };
+        });
+    }
     let msg = "Successfully repopulated all of DB data from cached analysis results";
     tracing::info!(msg);
     Ok(msg)
@@ -445,9 +462,14 @@ async fn upsert_prices_for_products_and_receipt(
     receipt_id: i32,
 ) -> Result<(), sqlx::Error> {
     // TODO: De-duplication means we are losing data points such as multiple discounts with the same name on one receipt; allow multiple entries of a given product on the same receipt
-    let mut data = product_names.into_iter().zip(counts.into_iter().zip(unit_prices.into_iter())).unique_by(|(name, _)| name.clone()).collect::<Vec<_>>();
+    let mut data = product_names
+        .into_iter()
+        .zip(counts.into_iter().zip(unit_prices.into_iter()))
+        .unique_by(|(name, _)| name.clone())
+        .collect::<Vec<_>>();
     data.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
-    let (product_names, (counts, unit_prices)): (Vec<String>, (Vec<f64>, Vec<f64>)) = data.into_iter().unzip();
+    let (product_names, (counts, unit_prices)): (Vec<String>, (Vec<f64>, Vec<f64>)) =
+        data.into_iter().unzip();
     sqlx::query!(
         r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT tmp.count, tmp.unit_price, tmp.receipt_id, products.id FROM (SELECT UNNEST($1::float[]) AS count, UNNEST($2::float[]) AS unit_price, $3::integer AS receipt_id, UNNEST($4::text[]) AS name) tmp INNER JOIN products ON tmp.name = products.name ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
         &counts,
