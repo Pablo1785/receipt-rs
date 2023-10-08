@@ -110,7 +110,7 @@ async fn process_analysis_results(
     app_state.persist.save(&file_hash, &text)?;
     tracing::info!("Successfully cached raw response text in KV storage. Processing further...");
     let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
-    save_analysis_data(&app_state.pool, data).await?;
+    save_analysis_data(&app_state.pool, data, file_hash).await?;
     tracing::info!("Successfully saved receipt data in database");
     Ok::<(), AppError>(())
 }
@@ -341,6 +341,7 @@ async fn auth<B>(
 async fn save_analysis_data(
     pool: &PgPool,
     analysis_result: AnalyzeResultOperation,
+    file_hash: &str,
 ) -> Result<(), AppError> {
     let receipt_fields = analysis_result
         .analyzeResult
@@ -398,7 +399,7 @@ async fn save_analysis_data(
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
     };
 
-    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
+    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz, file_hash).await?;
 
     insert_products_if_not_exist(pool, &product_names)
         .await
@@ -432,11 +433,13 @@ async fn insert_receipt_if_not_exists(
     pool: &PgPool,
     merchant_name: &str,
     paid_at: chrono::DateTime<chrono_tz::Tz>,
+    file_hash: &str,
 ) -> Result<i32, sqlx::Error> {
     let res = sqlx::query!(
-        r#"INSERT INTO receipts(merchant_name, paid_at) VALUES ($1, $2) RETURNING *"#,
+        r#"INSERT INTO receipts(merchant_name, paid_at, file_sha256) VALUES ($1, $2, $3) RETURNING *"#,
         merchant_name,
-        paid_at
+        paid_at,
+        file_hash
     )
     .fetch_one(pool)
     .await?
