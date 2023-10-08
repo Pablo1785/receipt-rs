@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use axum::{
     extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, State},
     response::IntoResponse,
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Router,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -107,7 +107,7 @@ async fn process_analysis_results(
     app_state: Arc<AppState>,
 ) -> Result<(), AppError> {
     let text = res.text().await?;
-    app_state.persist.save(file_hash, &text)?;
+    app_state.persist.save(&file_hash, &text)?;
     tracing::info!("Successfully cached raw response text in KV storage. Processing further...");
     let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
     save_analysis_data(&app_state.pool, data).await?;
@@ -135,6 +135,9 @@ async fn upload(
             return Err(AppError::Anyhow(anyhow!(
                 "Submitted file's hash is already saved in the KV store. Not runnning analysis."
             )));
+        } else {
+            app_state.persist.save(&file_hash, "")?;
+            tracing::info!("Successfully cached file hash in KV storage. Processing further...");
         }
 
         let base64_file = BASE64_STANDARD.encode(data);
@@ -220,9 +223,7 @@ async fn show_all(
 }
 
 // TODO: Remove this dev endpoint
-async fn clear_db(
-    State(app_state): State<Arc<AppState>>,
-) -> Result<&'static str, AppError> {
+async fn clear_db(State(app_state): State<Arc<AppState>>) -> Result<&'static str, AppError> {
     let pool = &app_state.pool;
     let tx = pool.begin().await?;
     sqlx::query!("DELETE FROM prices").execute(pool).await?;
@@ -242,7 +243,18 @@ async fn hello_world() -> &'static str {
 async fn show_all_parsing_results(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<axum::Json<Vec<AnalyzeResultOperation>>, AppError> {
-    let parsed_results = app_state.persist.list()?.into_iter().map(|k| app_state.persist.load::<String>(&k).map_err(AppError::from).and_then(|raw| serde_json::from_str(&raw).map_err(AppError::from))).collect::<Result<Vec<AnalyzeResultOperation>, AppError>>()?;
+    let parsed_results = app_state
+        .persist
+        .list()?
+        .into_iter()
+        .map(|k| {
+            app_state
+                .persist
+                .load::<String>(&k)
+                .map_err(AppError::from)
+                .and_then(|raw| serde_json::from_str(&raw).map_err(AppError::from))
+        })
+        .collect::<Result<Vec<AnalyzeResultOperation>, AppError>>()?;
     Ok(axum::Json(parsed_results))
 }
 
@@ -367,18 +379,18 @@ async fn save_analysis_data(
         .unzip();
 
     let merchant_name = &receipt_fields.merchant_name.value_string;
-    
+
     // Netto receipt date strings detected by analysis API are usually well formatted (YYYY-m-d), but when generating a date value from that the model tends to flip month and day;
     // TODO: For now Netto dates will be a special case, until similar issue is encountered elsewhere
-    let date_str = if receipt_fields.transaction_date.content.contains("-") && merchant_name.to_lowercase().contains("netto") {
+    let date_str = if receipt_fields.transaction_date.content.contains("-")
+        && merchant_name.to_lowercase().contains("netto")
+    {
         receipt_fields.transaction_date.content
     } else {
         receipt_fields.transaction_date.value_date
     };
 
-    let datetime_str = date_str
-        + " "
-        + &receipt_fields.transaction_time.value_time;
+    let datetime_str = date_str + " " + &receipt_fields.transaction_time.value_time;
     let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S")
         .map_err(|_| anyhow!(format!("Invalid date string: {datetime_str}")))?;
     let chrono::LocalResult::Single(timestamp_tz) = Copenhagen.from_local_datetime(&timestamp)
