@@ -449,7 +449,7 @@ async fn upsert_prices_for_products_and_receipt(
     data.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
     let (product_names, (counts, unit_prices)): (Vec<String>, (Vec<f64>, Vec<f64>)) = data.into_iter().unzip();
     sqlx::query!(
-        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM (SELECT UNNEST($4::text[]) as name) tmp_products INNER JOIN products ON tmp_products.name = products.name ORDER BY products.name ASC) tmp ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
+        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT tmp.count, tmp.unit_price, tmp.receipt_id, products.id FROM (SELECT UNNEST($1::float[]) AS count, UNNEST($2::float[]) AS unit_price, $3::integer AS receipt_id, UNNEST($4::text[]) AS name) tmp INNER JOIN products ON tmp.name = products.name ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
         &counts,
         &unit_prices,
         receipt_id,

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT tmp.count, tmp.unit_price, tmp.receipt_id, products.id FROM (SELECT UNNEST($1::float[]) AS count, UNNEST($2::float[]) AS unit_price, $3::integer AS receipt_id, UNNEST($4::text[]) AS name) tmp INNER JOIN products ON tmp.name = products.name ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8Array",
+        "Float8Array",
+        "Int4",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe38b8a2cfbc2167e5e74ba37a2970c8936bd0008d51dbad655b82fa34d58860"
+}
