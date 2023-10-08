@@ -223,6 +223,13 @@ async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
+async fn show_all_parsing_results(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<axum::Json<Vec<AnalyzeResultOperation>>, AppError> {
+    let parsed_results = app_state.persist.list()?.into_iter().map(|k| app_state.persist.load::<String>(&k).map_err(AppError::from).and_then(|raw| serde_json::from_str(&raw).map_err(AppError::from))).collect::<Result<Vec<AnalyzeResultOperation>, AppError>>()?;
+    Ok(axum::Json(parsed_results))
+}
+
 #[derive(Clone)]
 struct AppState {
     client: Client,
@@ -260,10 +267,6 @@ async fn main(
         ));
     };
 
-    for k in persist.list().unwrap() {
-        tracing::info!("Stored result: {}", persist.load::<String>(&k).unwrap())
-    }
-
     let client = Client::new();
 
     let app_state = AppState {
@@ -279,6 +282,7 @@ async fn main(
     let router = Router::new()
         .route("/", get(hello_world))
         .route("/all", get(show_all))
+        .route("/all/raw", get(show_all_parsing_results))
         .route(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
