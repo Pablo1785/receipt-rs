@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use axum::{
     extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, State},
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -113,6 +113,24 @@ async fn process_analysis_results(
     save_analysis_data(&app_state.pool, data, file_hash).await?;
     tracing::info!("Successfully saved receipt data in database");
     Ok::<(), AppError>(())
+}
+
+async fn repopulate_db_from_cache(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<&'static str, AppError> {
+    let pool = &app_state.pool;
+    let tx = pool.begin().await?;
+    sqlx::query!("DELETE FROM prices").execute(pool).await?;
+    sqlx::query!("DELETE FROM products").execute(pool).await?;
+    sqlx::query!("DELETE FROM receipts").execute(pool).await?;
+    for (file_hash, text) in app_state.persist.list()?.into_iter().map(|k| (k.clone(), app_state.persist.load::<String>(&k))) {
+        let data: manual::AnalyzeResultOperation = serde_json::from_str(&text?)?;
+        save_analysis_data(&app_state.pool, data, &file_hash).await?;
+    }
+    tx.commit().await?;
+    let msg = "Successfully repopulated all of DB data from cached analysis results";
+    tracing::info!(msg);
+    Ok(msg)
 }
 
 async fn upload(
@@ -310,6 +328,7 @@ async fn main(
     let router = Router::new()
         .route("/", get(hello_world))
         .route("/dev/db/all", delete(clear_db))
+        .route("/dev/db/all", put(repopulate_db_from_cache))
         .route("/dev/cache/all", get(show_all_parsing_results))
         .route("/all", get(show_all))
         .route(
