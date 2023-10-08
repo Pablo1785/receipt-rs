@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM prices",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0945cef49018cbd88e37e7b87b4f3fe5b1ed046941f93565f1d21c286501a2a6"
+}
