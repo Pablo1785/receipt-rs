@@ -423,30 +423,35 @@ async fn save_analysis_data(
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
     };
 
+    let tx = pool.begin().await?;
     let receipt_id = upsert_receipt(pool, merchant_name, timestamp_tz, file_hash).await?;
 
     insert_products_if_not_exist(pool, &product_names)
         .await
         .map_err(AppError::from)?;
 
-    upsert_prices_for_products_and_receipt(pool, &counts, &unit_prices, &product_names, receipt_id)
+    upsert_prices_for_products_and_receipt(pool, counts, unit_prices, product_names, receipt_id)
         .await?;
+    tx.commit().await?;
     Ok(())
 }
 
 async fn upsert_prices_for_products_and_receipt(
     pool: &PgPool,
-    counts: &[f64],
-    unit_prices: &[f64],
-    product_names: &[String],
+    counts: Vec<f64>,
+    unit_prices: Vec<f64>,
+    product_names: Vec<String>,
     receipt_id: i32,
 ) -> Result<(), sqlx::Error> {
+    let mut data = product_names.into_iter().zip(counts.into_iter().zip(unit_prices.into_iter())).collect::<Vec<_>>();
+    data.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+    let (product_names, (counts, unit_prices)): (Vec<String>, (Vec<f64>, Vec<f64>)) = data.into_iter().unzip();
     sqlx::query!(
-        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM products WHERE name IN (SELECT UNNEST($4::text[]))) tmp ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
-        counts,
-        unit_prices,
+        r#"INSERT INTO prices(count, unit_price, receipt_id, product_id) SELECT UNNEST($1::float[]), UNNEST($2::float[]), $3, product_id FROM (SELECT id as product_id FROM (SELECT UNNEST($4::text[]) as name) tmp_products INNER JOIN products ON tmp_products.name = products.name ORDER BY products.name ASC) tmp ON CONFLICT ON CONSTRAINT prices_pkey DO UPDATE SET count=excluded.count, unit_price=excluded.unit_price"#,
+        &counts,
+        &unit_prices,
         receipt_id,
-        product_names
+        &product_names
     )
     .execute(pool)
     .await?;
