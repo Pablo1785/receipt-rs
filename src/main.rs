@@ -23,7 +23,7 @@ use serde_json::json;
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
-use sqlx::{Executor, PgPool, Row, postgres::PgPoolOptions, pool::PoolOptions};
+use sqlx::{pool::PoolOptions, postgres::PgPoolOptions, Executor, PgPool, Row};
 use thiserror::Error;
 
 mod manual;
@@ -120,37 +120,50 @@ async fn repopulate_db_from_cache(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<&'static str, AppError> {
     let tx = app_state.pool.begin().await?;
-    sqlx::query!("DELETE FROM prices").execute(&app_state.pool).await?;
-    sqlx::query!("DELETE FROM products").execute(&app_state.pool).await?;
-    sqlx::query!("DELETE FROM receipts").execute(&app_state.pool).await?;
+    sqlx::query!("DELETE FROM prices")
+        .execute(&app_state.pool)
+        .await?;
+    sqlx::query!("DELETE FROM products")
+        .execute(&app_state.pool)
+        .await?;
+    sqlx::query!("DELETE FROM receipts")
+        .execute(&app_state.pool)
+        .await?;
     tx.commit().await?;
-    
-    for file_hash in app_state.persist.list()? {
-        tokio::time::sleep(Duration::from_secs(1)).await;  // TODO: Find a way to change shuttle-rs acquire_timeout option for PgPool to avoid timeout errors
-        let app_state_clone = app_state.clone();
-        tokio::spawn(async move {
-            let res = app_state_clone
-                .persist
-                .load::<String>(&file_hash)
-                .map_err(AppError::from)
-                .and_then(|text| serde_json::from_str(&text).map_err(AppError::from));
-            match res {
-                Ok(data) => {
-                    if let Err(err) =
-                        save_analysis_data(&app_state_clone.pool, data, &file_hash).await
-                    {
-                        tracing::error!("{}", err.to_string());
-                    } else {
-                        tracing::info!(
-                            "Successfully saved receipted data in DB for file {}",
-                            file_hash
-                        );
-                    };
-                }
-                Err(err) => tracing::error!("{}", err.to_string()),
-            };
-        });
-    }
+
+    let file_hashes = app_state.persist.list()?;
+    tokio::spawn(async move {
+        for file_hash in file_hashes {
+            tokio::time::sleep(Duration::from_secs(1)).await; // TODO: Find a way to change shuttle-rs acquire_timeout option for PgPool to avoid timeout errors
+            let app_state_clone = app_state.clone();
+            tokio::spawn(async move {
+                let res = app_state_clone
+                    .persist
+                    .load::<String>(&file_hash)
+                    .map_err(AppError::from)
+                    .and_then(|text| serde_json::from_str(&text).map_err(AppError::from));
+                match res {
+                    Ok(data) => {
+                        if let Err(err) =
+                            save_analysis_data(&app_state_clone.pool, data, &file_hash).await
+                        {
+                            tracing::error!("{}", err.to_string());
+                        } else {
+                            tracing::info!(
+                                "Successfully saved receipted data in DB for cached results of analyzing file {}",
+                                file_hash
+                            );
+                        };
+                    }
+                    Err(err) => tracing::error!(
+                        "Cached results for file {} encountered an error during processing: {}",
+                        file_hash,
+                        err.to_string()
+                    ),
+                };
+            });
+        }
+    });
     let msg = "Successfully enqueued repopulation of DB data from cached analysis results. Results should be available shortly";
     tracing::info!(msg);
     Ok(msg)
@@ -444,7 +457,8 @@ async fn save_analysis_data(
     let tx = pool.begin().await?;
 
     // TODO: Currently the entire transaction crashes if there already exists a receipt with identical timestamp; in real life it would be possible for that to happen (especially if there is a lot of users)
-    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz, file_hash).await?;
+    let receipt_id =
+        insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz, file_hash).await?;
 
     insert_products_if_not_exist(pool, &product_names)
         .await
