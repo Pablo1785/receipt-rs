@@ -23,7 +23,7 @@ use serde_json::json;
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::{self};
 use shuttle_secrets::SecretStore;
-use sqlx::{Executor, PgPool, Row};
+use sqlx::{Executor, PgPool, Row, postgres::PgPoolOptions, pool::PoolOptions};
 use thiserror::Error;
 
 mod manual;
@@ -119,14 +119,14 @@ async fn process_analysis_results(
 async fn repopulate_db_from_cache(
     State(app_state): State<Arc<AppState>>,
 ) -> Result<&'static str, AppError> {
-    let pool = &app_state.pool;
-    let tx = pool.begin().await?;
-    sqlx::query!("DELETE FROM prices").execute(pool).await?;
-    sqlx::query!("DELETE FROM products").execute(pool).await?;
-    sqlx::query!("DELETE FROM receipts").execute(pool).await?;
+    let tx = app_state.pool.begin().await?;
+    sqlx::query!("DELETE FROM prices").execute(&app_state.pool).await?;
+    sqlx::query!("DELETE FROM products").execute(&app_state.pool).await?;
+    sqlx::query!("DELETE FROM receipts").execute(&app_state.pool).await?;
     tx.commit().await?;
-
+    
     for file_hash in app_state.persist.list()? {
+        tokio::time::sleep(Duration::from_secs(1)).await;  // TODO: Find a way to change shuttle-rs acquire_timeout option for PgPool to avoid timeout errors
         let app_state_clone = app_state.clone();
         tokio::spawn(async move {
             let res = app_state_clone
@@ -151,7 +151,7 @@ async fn repopulate_db_from_cache(
             };
         });
     }
-    let msg = "Successfully repopulated all of DB data from cached analysis results";
+    let msg = "Successfully enqueued repopulation of DB data from cached analysis results. Results should be available shortly";
     tracing::info!(msg);
     Ok(msg)
 }
