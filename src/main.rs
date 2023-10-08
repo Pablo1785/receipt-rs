@@ -442,7 +442,9 @@ async fn save_analysis_data(
     };
 
     let tx = pool.begin().await?;
-    let receipt_id = upsert_receipt(pool, merchant_name, timestamp_tz, file_hash).await?;
+
+    // TODO: Currently the entire transaction crashes if there already exists a receipt with identical timestamp; in real life it would be possible for that to happen (especially if there is a lot of users)
+    let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz, file_hash).await?;
 
     insert_products_if_not_exist(pool, &product_names)
         .await
@@ -482,14 +484,14 @@ async fn upsert_prices_for_products_and_receipt(
     Ok(())
 }
 
-async fn upsert_receipt(
+async fn insert_receipt_if_not_exists(
     pool: &PgPool,
     merchant_name: &str,
     paid_at: chrono::DateTime<chrono_tz::Tz>,
     file_hash: &str,
 ) -> Result<i32, sqlx::Error> {
     let res = sqlx::query!(
-        r#"INSERT INTO receipts(merchant_name, paid_at, file_sha256) VALUES ($1, $2, $3) ON CONFLICT ON CONSTRAINT unique_paid_at DO UPDATE SET merchant_name=excluded.merchant_name, file_sha256=excluded.file_sha256 RETURNING *"#,
+        r#"INSERT INTO receipts(merchant_name, paid_at, file_sha256) VALUES ($1, $2, $3) RETURNING *"#,
         merchant_name,
         paid_at,
         file_hash
