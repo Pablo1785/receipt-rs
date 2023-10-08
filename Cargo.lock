@@ -1931,6 +1931,7 @@ dependencies = [
  "chrono-tz",
  "google-vision1",
  "http-body-util",
+ "itertools 0.11.0",
  "reqwest",
  "serde",
  "serde_derive",
