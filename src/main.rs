@@ -1,10 +1,11 @@
 use chrono::TimeZone;
 use shuttle_persist::{PersistError, PersistInstance};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::RwLock;
 
 use anyhow::anyhow;
 use axum::{
-    extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, State},
+    extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, Path, Query, State},
     response::IntoResponse,
     routing::{get, post},
     Router,
@@ -15,7 +16,7 @@ use chrono_tz::Europe::Copenhagen;
 use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
-    Client, Response, StatusCode,
+    Response, StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -38,7 +39,7 @@ const MODEL_ID: &str = "prebuilt-receipt";
 async fn analyze_file(
     file_string: &str,
     api_key: &str,
-    client: &Client,
+    client: &reqwest::Client,
 ) -> Result<Response, reqwest::Error> {
     let url = format!(
         "{ENDPOINT}formrecognizer/documentModels/{MODEL_ID}:analyze?api-version=2023-07-31"
@@ -55,7 +56,7 @@ async fn analyze_file(
 async fn get_analysis_results(
     url: &str,
     api_key: &str,
-    client: &Client,
+    client: &reqwest::Client,
 ) -> Result<Response, reqwest::Error> {
     let req = client
         .get(url)
@@ -104,7 +105,7 @@ impl IntoResponse for AppError {
 async fn process_analysis_results(
     file_hash: &str,
     res: reqwest::Response,
-    app_state: Arc<AppState>,
+    app_state: &AppState,
 ) -> Result<(), AppError> {
     let text = res.text().await?;
     app_state.persist.save(file_hash, &text)?;
@@ -175,7 +176,7 @@ async fn upload(
                 tracing::info!("Received response from API. Processing...");
                 let process_res = match res {
                     Ok(success_res) => {
-                        process_analysis_results(&file_hash, success_res, app_state.clone()).await
+                        process_analysis_results(&file_hash, success_res, &app_state).await
                     }
                     Err(err) => Err(err.into()),
                 };
@@ -223,13 +224,111 @@ async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
+#[derive(Deserialize)]
+struct AuthRedirectParams {
+    state: String,
+    code: String,
+}
+
+async fn google_auth_redirect(
+    Query(AuthRedirectParams { state, code }): Query<AuthRedirectParams>,
+) -> Result<(), AppError> {
+    Ok(())
+}
+
+struct UserData {
+    id: i32,
+    email: String,
+    google_drive_access_token: Option<String>,
+    google_drive_access_token_created_at: Option<chrono::DateTime<chrono::Utc>>,
+    google_drive_refresh_token: Option<String>,
+    google_drive_refresh_token_created_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn watch_google_drive_for_user(
+    Path(user_id): Path<i32>,
+    State(app_state): State<Arc<AppState>>,
+) -> Result<(), AppError> {
+    let user_data = sqlx::query_as!(UserData, "SELECT * FROM users WHERE id = $1", user_id)
+        .fetch_all(&app_state.pool)
+        .await?;
+    if let Some(access_token) = user_data
+        .first()
+        .and_then(|user| user.google_drive_access_token.as_ref())
+    {
+        let client = google_drive::Client::new_from_env(access_token, "").await;
+        client.changes().watch(
+            page_token,
+            drive_id,
+            include_corpus_removals,
+            include_items_from_all_drives,
+            include_permissions_for_view,
+            include_removed,
+            include_team_drive_items,
+            page_size,
+            restrict_to_my_drive,
+            spaces,
+            supports_all_drives,
+            supports_team_drives,
+            team_drive_id,
+            body,
+        );
+
+        return Ok(());
+    }
+    let mut google_drive = app_state.google_drive_client.clone();
+    let user_consent_url = google_drive.user_consent_url(&["drive.photos.readonly".to_string()]);
+    let push_notification_url =
+        "https://trigger.macrodroid.com/0f8f6e6c-b2d3-4260-a79a-c92fe8e793ec/gdrive";
+    let req = app_state
+        .client
+        .get(push_notification_url)
+        .query(&[("consent_url", user_consent_url)])
+        .build()?;
+    let res = app_state.client.execute(req).await?;
+
+    Ok(())
+}
+
+async fn build_authenticated_google_drive_client(
+    client: &reqwest::Client,
+    push_notification_url: &str,
+) -> reqwest::Response {
+    let mut google_drive = google_drive::Client::new_from_env("", "").await;
+
+    // Get the URL to request consent from the user.
+    // You can optionally pass in scopes. If none are provided, then the
+    // resulting URL will not have any scopes.
+    let user_consent_url = google_drive.user_consent_url(&["drive.photos.readonly".to_string()]);
+
+    // Push a notification to the client app requesting
+    let req = client
+        .get(push_notification_url)
+        .query(&[("consent_url", user_consent_url)])
+        .build()
+        .unwrap();
+    let res = client.execute(req).await.unwrap();
+    return res;
+
+    // In your redirect URL capture the code sent and our state.
+    // Send it along to the request for the token.
+    // let code = "thing-from-redirect-url";
+    // let state = "state-from-redirect-url";
+    // let mut access_token = google_drive.get_access_token(code, state).await.unwrap();
+
+    // // You can additionally refresh the access token with the following.
+    // // You must have a refresh token to be able to call this function.
+    // access_token = google_drive.refresh_access_token().await.unwrap();
+}
+
 #[derive(Clone)]
 struct AppState {
-    client: Client,
+    client: reqwest::Client,
     azure_form_recognizer_api_key: String,
     pool: PgPool,
     client_secret: String,
     persist: PersistInstance,
+    google_drive_client: google_drive::Client,
 }
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
@@ -264,7 +363,9 @@ async fn main(
         tracing::info!("Stored result: {}", persist.load::<String>(&k).unwrap())
     }
 
-    let client = Client::new();
+    let google_drive_client = google_drive::Client::new_from_env("", "").await;
+
+    let client = reqwest::Client::new();
 
     let app_state = AppState {
         client,
@@ -272,19 +373,27 @@ async fn main(
         pool,
         client_secret,
         persist,
+        google_drive_client,
     };
 
     let state = Arc::new(app_state);
 
-    let router = Router::new()
+    let auth_router = Router::new()
         .route("/", get(hello_world))
         .route("/all", get(show_all))
         .route(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
         )
+        .route("/watch", post(watch_google_drive_for_user))
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth))
+        .with_state(state.clone());
+
+    let no_auth_router = Router::new()
+        .route("/auth", get(google_auth_redirect))
         .with_state(state);
+
+    let router = no_auth_router.nest("", auth_router);
 
     Ok(router.into())
     // tracing::info!("Response: {res:?}");
@@ -414,7 +523,7 @@ async fn insert_products_if_not_exist(
 
 #[cfg(test)]
 mod tests {
-    use crate::manual;
+    use crate::{build_authenticated_google_drive_client, manual};
 
     #[test]
     fn parse_receipt_analysis_results() {
@@ -432,5 +541,18 @@ mod tests {
     fn parse_another_receipt_analysis_results() {
         serde_json::from_str::<manual::AnalyzeResultOperation>(include_str!("../response3.json"))
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn send_push_notification() {
+        // Push a notification to the client app requesting
+        let app_url = "https://trigger.macrodroid.com/0f8f6e6c-b2d3-4260-a79a-c92fe8e793ec/gdrive";
+
+        let client = reqwest::Client::new();
+        let res = build_authenticated_google_drive_client(&client, app_url).await;
+
+        // let req = client.get(app_url).query(&[("consent_url", "https://example.com")]).build().unwrap();
+        // let res = client.execute(req).await.unwrap();
+        assert_eq!(format!("{res:?}"), "abc".to_string());
     }
 }
