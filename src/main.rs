@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use axum::{
     extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, State},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -219,6 +219,22 @@ async fn show_all(
     Ok(axum::Json(data))
 }
 
+// TODO: Remove this dev endpoint
+async fn clear_db(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<&'static str, AppError> {
+    let pool = &app_state.pool;
+    let tx = pool.begin().await?;
+    sqlx::query!("DELETE FROM prices").execute(pool).await?;
+    sqlx::query!("DELETE FROM products").execute(pool).await?;
+    sqlx::query!("DELETE FROM receipts").execute(pool).await?;
+    tx.commit().await?;
+
+    let msg = "All data has been deleted from DB";
+    tracing::info!(msg);
+    Ok(msg)
+}
+
 async fn hello_world() -> &'static str {
     "Hello, world!"
 }
@@ -281,8 +297,9 @@ async fn main(
 
     let router = Router::new()
         .route("/", get(hello_world))
+        .route("/dev/db/all", delete(clear_db))
+        .route("/dev/cache/all", get(show_all_parsing_results))
         .route("/all", get(show_all))
-        .route("/all/raw", get(show_all_parsing_results))
         .route(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
@@ -349,7 +366,17 @@ async fn save_analysis_data(
         .take(BIND_LIMIT)
         .unzip();
 
-    let datetime_str = receipt_fields.transaction_date.value_date
+    let merchant_name = &receipt_fields.merchant_name.value_string;
+    
+    // Netto receipt date strings detected by analysis API are usually well formatted (YYYY-m-d), but when generating a date value from that the model tends to flip month and day;
+    // TODO: For now Netto dates will be a special case, until similar issue is encountered elsewhere
+    let date_str = if receipt_fields.transaction_date.content.contains("-") && merchant_name.to_lowercase().contains("netto") {
+        receipt_fields.transaction_date.content
+    } else {
+        receipt_fields.transaction_date.value_date
+    };
+
+    let datetime_str = date_str
         + " "
         + &receipt_fields.transaction_time.value_time;
     let timestamp = chrono::NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S")
@@ -358,8 +385,6 @@ async fn save_analysis_data(
     else {
         return Err(anyhow!("Error converting naive timestamp to Copenhagen time").into());
     };
-
-    let merchant_name = &receipt_fields.merchant_name.value_string;
 
     let receipt_id = insert_receipt_if_not_exists(pool, merchant_name, timestamp_tz).await?;
 
