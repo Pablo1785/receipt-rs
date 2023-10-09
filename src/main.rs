@@ -89,6 +89,15 @@ enum AppError {
     ChronoParse(#[from] chrono::ParseError),
     #[error(transparent)]
     ShuttlePersist(#[from] PersistError),
+    #[error(transparent)]
+    Csv(#[from] csv::Error),
+    #[error(transparent)]
+    StringFromUtf8(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    CsvIntoInner(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
+    
 }
 
 // Tell axum how to convert `AppError` into a response.
@@ -276,6 +285,27 @@ async fn show_all(
     Ok(axum::Json(data))
 }
 
+async fn download(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<(axum::response::AppendHeaders<[(axum::http::header::HeaderName, &'static str); 2]>, String), AppError> {
+    let pool = &app_state.pool;
+    let data = sqlx::query_as!(AllData, "SELECT receipts.paid_at, receipts.merchant_name, prices.count, prices.unit_price, products.name FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(pool).await?;
+    
+    let content: Vec<u8> = Vec::with_capacity(data.len() * 2);
+    let mut writer = csv::Writer::from_writer(content);
+    for row in data {
+        writer.serialize(row)?;
+    }
+    let content = writer.into_inner()?;
+    
+    let headers: axum::response::AppendHeaders<[(axum::http::HeaderName, &str); 2]> = axum::response::AppendHeaders([
+        (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+        (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"data.csv\""),
+    ]);
+
+    Ok((headers, String::from_utf8(content)?))
+}
+
 // TODO: Remove this dev endpoint
 async fn clear_db(State(app_state): State<Arc<AppState>>) -> Result<&'static str, AppError> {
     let pool = &app_state.pool;
@@ -371,6 +401,7 @@ async fn main(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
         )
+        .route("/download", get(download))
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth))
         .with_state(state);
 
