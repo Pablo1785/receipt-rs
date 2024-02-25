@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO raw_results(sha256_digest, result_json) VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf161b715eace79b5e97e1fe26a6db2f1fdb297de4942b6652cabb1e75bd92fd"
+}

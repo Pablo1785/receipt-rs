@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM raw_results",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "result_json",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sha256_digest",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6c1f6bf5b317c8155ca72681a5392236271bc1328f3e9ac5e0222a514430f110"
+}

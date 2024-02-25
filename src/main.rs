@@ -1,10 +1,13 @@
 use chrono::TimeZone;
-use shuttle_persist::{PersistError, PersistInstance};
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tower_http::trace::{self, DefaultMakeSpan, TraceLayer};
+use tracing::{info_span, instrument::WithSubscriber, Level};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::{
-    extract::{multipart::MultipartError, DefaultBodyLimit, Multipart, State},
+    extract::{multipart::MultipartError, DefaultBodyLimit, MatchedPath, Multipart, State},
+    http::{Request, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
@@ -16,14 +19,13 @@ use itertools::Itertools;
 use manual::AnalyzeResultOperation;
 use reqwest::{
     header::{ToStrError, CONTENT_LENGTH, CONTENT_TYPE},
-    Client, Response, StatusCode,
+    Client, Response,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use shuttle_axum::ShuttleAxum;
-use shuttle_runtime::{self};
-use shuttle_secrets::SecretStore;
-use sqlx::{pool::PoolOptions, postgres::PgPoolOptions, Executor, PgPool, Row};
+use sqlx::{
+    migrate::MigrateError, pool::PoolOptions, postgres::PgPoolOptions, Executor, PgPool, Row,
+};
 use thiserror::Error;
 
 mod manual;
@@ -88,8 +90,6 @@ enum AppError {
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
     #[error(transparent)]
-    ShuttlePersist(#[from] PersistError),
-    #[error(transparent)]
     Csv(#[from] csv::Error),
     #[error(transparent)]
     StringFromUtf8(#[from] std::string::FromUtf8Error),
@@ -97,7 +97,10 @@ enum AppError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     CsvIntoInner(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
-    
+    #[error(transparent)]
+    EnvVar(#[from] std::env::VarError),
+    #[error(transparent)]
+    Migrate(#[from] MigrateError),
 }
 
 // Tell axum how to convert `AppError` into a response.
@@ -117,8 +120,14 @@ async fn process_analysis_results(
     app_state: Arc<AppState>,
 ) -> Result<(), AppError> {
     let text = res.text().await?;
-    app_state.persist.save(&file_hash, &text)?;
-    tracing::info!("Successfully cached raw response text in KV storage. Processing further...");
+    sqlx::query!(
+        "INSERT INTO raw_results(sha256_digest, result_json) VALUES ($1, $2)",
+        file_hash,
+        text
+    )
+    .execute(&app_state.pool)
+    .await?;
+    tracing::info!("Successfully cached raw response text in DB. Processing further...");
     let data: manual::AnalyzeResultOperation = serde_json::from_str(&text)?;
     save_analysis_data(&app_state.pool, data, file_hash).await?;
     tracing::info!("Successfully saved receipt data in database");
@@ -140,33 +149,36 @@ async fn repopulate_db_from_cache(
         .await?;
     tx.commit().await?;
 
-    let file_hashes = app_state.persist.list()?;
+    let raw_results = sqlx::query_as!(RawResult, "SELECT * FROM raw_results")
+        .fetch_all(&app_state.pool)
+        .await?;
     tokio::spawn(async move {
-        for file_hash in file_hashes {
+        for RawResult {
+            result_json,
+            sha256_digest,
+            ..
+        } in raw_results
+        {
             tokio::time::sleep(Duration::from_secs(1)).await; // TODO: Find a way to change shuttle-rs acquire_timeout option for PgPool to avoid timeout errors
             let app_state_clone = app_state.clone();
             tokio::spawn(async move {
-                let res = app_state_clone
-                    .persist
-                    .load::<String>(&file_hash)
-                    .map_err(AppError::from)
-                    .and_then(|text| serde_json::from_str(&text).map_err(AppError::from));
+                let res = serde_json::from_str(&result_json).map_err(AppError::from);
                 match res {
                     Ok(data) => {
                         if let Err(err) =
-                            save_analysis_data(&app_state_clone.pool, data, &file_hash).await
+                            save_analysis_data(&app_state_clone.pool, data, &sha256_digest).await
                         {
                             tracing::error!("{}", err.to_string());
                         } else {
                             tracing::info!(
                                 "Successfully saved receipted data in DB for cached results of analyzing file {}",
-                                file_hash
+                                sha256_digest
                             );
                         };
                     }
                     Err(err) => tracing::error!(
                         "Cached results for file {} encountered an error during processing: {}",
-                        file_hash,
+                        sha256_digest,
                         err.to_string()
                     ),
                 };
@@ -187,20 +199,29 @@ async fn upload(
 
         let file_hash = sha256::digest(data.as_ref());
 
-        let is_already_analyzed = app_state
-            .persist
-            .list()?
-            .into_iter()
-            .find(|hash| &file_hash == hash)
-            .is_some();
+        let pool = &app_state.pool;
+
+        let is_already_analyzed = sqlx::query!(
+            "SELECT * FROM raw_results WHERE sha256_digest = $1",
+            &file_hash
+        )
+        .fetch_optional(pool)
+        .await?
+        .is_some();
 
         if is_already_analyzed {
             return Err(AppError::Anyhow(anyhow!(
-                "Submitted file's hash is already saved in the KV store. Not runnning analysis."
+                "Submitted file's hash is already saved in the DB. Not runnning analysis."
             )));
         } else {
-            app_state.persist.save(&file_hash, "")?;
-            tracing::info!("Successfully cached file hash in KV storage. Processing further...");
+            sqlx::query!(
+                "INSERT INTO raw_results(result_json, sha256_digest) VALUES ($1, $2)",
+                "",
+                file_hash
+            )
+            .execute(pool)
+            .await?;
+            tracing::info!("Successfully cached file hash in DB. Processing further...");
         }
 
         let base64_file = BASE64_STANDARD.encode(data);
@@ -214,7 +235,7 @@ async fn upload(
         .await?;
         tracing::info!("Successfully received response from analysis API. Processing...");
 
-        if let StatusCode::ACCEPTED = res.status() {
+        if let reqwest::StatusCode::ACCEPTED = res.status() {
             let result_url = res
                 .headers()
                 .get("Operation-Location")
@@ -285,23 +306,43 @@ async fn show_all(
     Ok(axum::Json(data))
 }
 
+async fn show_all_cached(
+    State(app_state): State<Arc<AppState>>,
+) -> Result<axum::Json<Vec<RawResult>>, AppError> {
+    let pool = &app_state.pool;
+    let data = sqlx::query_as!(RawResult, "SELECT * FROM raw_results")
+        .fetch_all(pool)
+        .await?;
+    Ok(axum::Json(data))
+}
+
 async fn download(
     State(app_state): State<Arc<AppState>>,
-) -> Result<(axum::response::AppendHeaders<[(axum::http::header::HeaderName, &'static str); 2]>, String), AppError> {
+) -> Result<
+    (
+        axum::response::AppendHeaders<[(axum::http::header::HeaderName, &'static str); 2]>,
+        String,
+    ),
+    AppError,
+> {
     let pool = &app_state.pool;
     let data = sqlx::query_as!(AllData, "SELECT receipts.paid_at, receipts.merchant_name, prices.count, prices.unit_price, products.name FROM receipts JOIN prices ON receipts.id = prices.receipt_id JOIN products ON products.id = prices.product_id").fetch_all(pool).await?;
-    
+
     let content: Vec<u8> = Vec::with_capacity(data.len() * 2);
     let mut writer = csv::Writer::from_writer(content);
     for row in data {
         writer.serialize(row)?;
     }
     let content = writer.into_inner()?;
-    
-    let headers: axum::response::AppendHeaders<[(axum::http::HeaderName, &str); 2]> = axum::response::AppendHeaders([
-        (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
-        (axum::http::header::CONTENT_DISPOSITION, "attachment; filename=\"data.csv\""),
-    ]);
+
+    let headers: axum::response::AppendHeaders<[(axum::http::HeaderName, &str); 2]> =
+        axum::response::AppendHeaders([
+            (axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"data.csv\"",
+            ),
+        ]);
 
     Ok((headers, String::from_utf8(content)?))
 }
@@ -324,22 +365,11 @@ async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
-async fn show_all_parsing_results(
-    State(app_state): State<Arc<AppState>>,
-) -> Result<axum::Json<Vec<AnalyzeResultOperation>>, AppError> {
-    let parsed_results = app_state
-        .persist
-        .list()?
-        .into_iter()
-        .map(|k| {
-            app_state
-                .persist
-                .load::<String>(&k)
-                .map_err(AppError::from)
-                .and_then(|raw| serde_json::from_str(&raw).map_err(AppError::from))
-        })
-        .collect::<Result<Vec<AnalyzeResultOperation>, AppError>>()?;
-    Ok(axum::Json(parsed_results))
+#[derive(Serialize, Deserialize)]
+struct RawResult {
+    id: i32,
+    result_json: String,
+    sha256_digest: String,
 }
 
 #[derive(Clone)]
@@ -348,7 +378,6 @@ struct AppState {
     azure_form_recognizer_api_key: String,
     pool: PgPool,
     client_secret: String,
-    persist: PersistInstance,
 }
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
@@ -356,28 +385,23 @@ const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
 // Postgres maximum number of parameters in a statement
 const BIND_LIMIT: usize = 65535;
 
-#[shuttle_runtime::main]
-async fn main(
-    #[shuttle_persist::Persist] persist: PersistInstance,
-    #[shuttle_aws_rds::Postgres] pool: PgPool,
-    #[shuttle_secrets::Secrets] secret_store: SecretStore,
-) -> ShuttleAxum {
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .map_err(anyhow::Error::from)?;
+#[tokio::main]
+async fn main() -> Result<(), AppError> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL env var missing")?;
+    let pool = PgPoolOptions::new()
+        .max_connections(20)
+        .connect(&database_url)
+        .await?;
 
-    let Some(azure_form_recognizer_api_key) = secret_store.get("AZURE_FORM_RECOGNIZER_KEY") else {
-        return Err(shuttle_runtime::Error::BuildPanic(
-            "Could not find AZURE_FORM_RECOGNIZER_KEY in secrets".into(),
-        ));
-    };
+    sqlx::migrate!().run(&pool).await?;
 
-    let Some(client_secret) = secret_store.get("CLIENT_SECRET") else {
-        return Err(shuttle_runtime::Error::BuildPanic(
-            "Could not find CLIENT_SECRET in secrets".into(),
-        ));
-    };
+    let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
+        .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
+
+    let client_secret = std::env::var("CLIENT_SECRET").context("CLIENT_SECRET env var missing")?;
 
     let client = Client::new();
 
@@ -386,7 +410,6 @@ async fn main(
         azure_form_recognizer_api_key,
         pool,
         client_secret,
-        persist,
     };
 
     let state = Arc::new(app_state);
@@ -395,27 +418,50 @@ async fn main(
         .route("/", get(hello_world))
         .route("/dev/db/all", delete(clear_db))
         .route("/dev/db/all", put(repopulate_db_from_cache))
-        .route("/dev/cache/all", get(show_all_parsing_results))
+        .route("/dev/cache/all", get(show_all_cached))
         .route("/all", get(show_all))
         .route(
             "/upload",
             post(upload).layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
         )
         .route("/download", get(download))
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                // Log the matched route's path (with placeholders not filled in).
+                // Use request.uri() or OriginalUri if you want the real path.
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http_request",
+                    method = ?request.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth))
         .with_state(state);
-
-    Ok(router.into())
-    // tracing::info!("Response: {res:?}");
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .context("Binding TCP listener to addr")?;
+    tracing::info!("Server listening on {}", addr);
+    axum::serve(listener, router.into_make_service())
+        .await
+        .context("Server must always start listening")?;
+    Ok(())
 }
 
-async fn auth<B>(
+async fn auth(
     State(app_state): State<Arc<AppState>>,
-    axum::TypedHeader(axum::headers::Authorization(bearer)): axum::TypedHeader<
-        axum::headers::Authorization<axum::headers::authorization::Bearer>,
+    axum_extra::typed_header::TypedHeader(headers::Authorization(bearer)): axum_extra::typed_header::TypedHeader<
+        headers::Authorization<headers::authorization::Bearer>,
     >,
-    request: axum::http::Request<B>,
-    next: axum::middleware::Next<B>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
     if app_state.client_secret != bearer.token() {
         return Err(StatusCode::FORBIDDEN);
