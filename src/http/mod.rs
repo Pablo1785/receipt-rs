@@ -1,0 +1,124 @@
+use std::{borrow::Borrow, net::SocketAddr, ops::Deref, sync::Arc};
+
+use analysis::{download, show_all, upload, UploadDeps};
+use anyhow::Context as _;
+use auth::AuthDeps;
+use axum::{
+    extract::{DefaultBodyLimit, FromRef, MatchedPath},
+    http::Request,
+    routing::{delete, get, post, put},
+    Router,
+};
+use dev::{clear_db, repopulate_db_from_cache, show_all_cached};
+use reqwest::Client;
+use sqlx::{postgres::PgPoolOptions, PgPool};
+use tower_http::trace::TraceLayer;
+use tracing::info_span;
+
+use crate::AppError;
+
+mod analysis;
+mod auth;
+mod dev;
+
+const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
+
+pub struct AppDeps {
+    pub pool: PgPool,
+    pub azure_form_recognizer_api_key: String,
+    pub client_secret: String,
+    pub client: Client,
+}
+
+impl AppDeps {
+    pub async fn try_from_env() -> Result<Self, AppError> {
+        let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL env var missing")?;
+        let pool = PgPoolOptions::new()
+            .max_connections(20)
+            .connect(&database_url)
+            .await?;
+
+        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
+            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
+
+        let client_secret =
+            std::env::var("CLIENT_SECRET").context("CLIENT_SECRET env var missing")?;
+
+        let deps = AppDeps {
+            pool,
+            azure_form_recognizer_api_key,
+            client_secret,
+            client: Client::new(),
+        };
+        Ok(deps)
+    }
+}
+
+pub struct DbState {
+    pub pool: PgPool,
+}
+
+impl FromRef<Arc<AppDeps>> for DbState {
+    fn from_ref(input: &Arc<AppDeps>) -> Self {
+        Self {
+            pool: input.pool.clone(),
+        }
+    }
+}
+
+pub fn app(deps: AppDeps) -> Router {
+    let deps = Arc::new(deps);
+    let router = Router::new()
+        .route("/dev/db/all", delete(clear_db).with_state(deps.clone()))
+        .route(
+            "/dev/db/all",
+            put(repopulate_db_from_cache).with_state(deps.clone()),
+        )
+        .route(
+            "/dev/cache/all",
+            get(show_all_cached).with_state(deps.clone()),
+        )
+        .route("/all", get(show_all).with_state(deps.clone()))
+        .route(
+            "/upload",
+            post(upload)
+                .with_state(deps.clone())
+                .layer(DefaultBodyLimit::max(UPLOAD_LIMIT_BYTES)),
+        )
+        .route("/download", get(download).with_state(deps.clone()))
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                // Log the matched route's path (with placeholders not filled in).
+                // Use request.uri() or OriginalUri if you want the real path.
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http_request",
+                    method = ?request.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            deps.clone(),
+            auth::auth,
+        ));
+    router
+}
+
+pub async fn serve(deps: AppDeps) -> Result<(), AppError> {
+    let router = app(deps);
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .context("Binding TCP listener to addr")?;
+    tracing::info!("Server listening on {}", addr);
+    axum::serve(listener, router.into_make_service())
+        .await
+        .context("Server must always start listening")?;
+    Ok(())
+}

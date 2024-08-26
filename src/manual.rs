@@ -536,3 +536,24 @@ pub struct BoundingRegion {
     pub page_number: i64,
     pub polygon: Vec<i64>,
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parse_receipt_analysis_results() {
+        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response1.json"))
+            .unwrap();
+    }
+
+    #[test]
+    fn parse_other_receipt_analysis_results() {
+        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response2.json"))
+            .unwrap();
+    }
+
+    #[test]
+    fn parse_another_receipt_analysis_results() {
+        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response3.json"))
+            .unwrap();
+    }
+}

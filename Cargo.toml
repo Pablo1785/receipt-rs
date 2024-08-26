@@ -34,3 +34,6 @@ tracing-subscriber = "0.3.17"
 [[bin]]
 name = "receipt-rs"
 path = "src/main.rs"
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
