@@ -1,8 +1,7 @@
-use std::{borrow::Borrow, net::SocketAddr, ops::Deref, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
-use analysis::{download, show_all, upload, UploadDeps};
+use analysis::{download, show_all, upload};
 use anyhow::Context as _;
-use auth::AuthDeps;
 use axum::{
     extract::{DefaultBodyLimit, FromRef, MatchedPath},
     http::Request,
@@ -15,7 +14,7 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 
-use crate::AppError;
+use crate::error::AppError;
 
 mod analysis;
 mod auth;
@@ -38,6 +37,23 @@ impl AppDeps {
             .connect(&database_url)
             .await?;
 
+        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
+            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
+
+        let client_secret =
+            std::env::var("CLIENT_SECRET").context("CLIENT_SECRET env var missing")?;
+
+        let deps = AppDeps {
+            pool,
+            azure_form_recognizer_api_key,
+            client_secret,
+            client: Client::new(),
+        };
+        Ok(deps)
+    }
+
+    /// This function is used for testing purposes only
+    pub async fn try_from_env_and_pool(pool: PgPool) -> Result<Self, AppError> {
         let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
             .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
 

@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::{
+    error::AppError,
     service::{
         ocr::{analyze_file, get_analysis_results},
         process_analysis_results,
     },
-    AppError,
 };
 
 use super::{AppDeps, DbState};

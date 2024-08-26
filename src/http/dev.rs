@@ -1,9 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::extract::State;
-use sqlx::PgPool;
 
-use crate::{http::analysis::RawResult, service::save_analysis_data, AppError};
+use crate::{error::AppError, http::analysis::RawResult, service::save_analysis_data};
 
 use super::DbState;
 

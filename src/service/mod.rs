@@ -1,4 +1,4 @@
-use crate::{manual::AnalyzeResultOperation, AppError};
+use crate::{error::AppError, manual::AnalyzeResultOperation};
 use anyhow::anyhow;
 use chrono::TimeZone;
 use chrono_tz::Europe::Copenhagen;
