@@ -91,7 +91,26 @@ pub async fn upload(
     let base64_file = BASE64_STANDARD.encode(data);
 
     tracing::info!("New file detected, starting analysis...");
-    let res = analyze_file(&base64_file, &app_state.ocr, &app_state.client).await;
+    let mut retries = 3;
+    let mut wait_secs = 1;
+    let res = loop {
+        match analyze_file(&base64_file, &app_state.ocr, &app_state.client).await {
+            Ok(res) => break Ok(res),
+            Err(err) => {
+                if retries > 0 {
+                    retries -= 1;
+                    tracing::info!(
+                        "Analysis failed. Retrying in {} seconds...",
+                        wait_secs
+                    );
+                    tokio::time::sleep(Duration::from_secs(wait_secs)).await;
+                    wait_secs *= 2;
+                } else {
+                    break Err(err);
+                }
+            }
+        }
+    };
 
     if let Err(err) = res {
         tracing::error!("Error received from analysis API {:#?}", err);
