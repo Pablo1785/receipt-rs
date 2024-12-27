@@ -94,7 +94,7 @@ pub async fn upload(
     let res = analyze_file(&base64_file, &app_state.ocr, &app_state.client).await;
 
     if let Err(err) = res {
-        tracing::error!("Error received from analysis API");
+        tracing::error!("Error received from analysis API {:#?}", err);
         return Err(err.into());
     }
     let res = res.unwrap();
