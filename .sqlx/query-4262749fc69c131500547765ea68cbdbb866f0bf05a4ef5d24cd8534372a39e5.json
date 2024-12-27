@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM raw_results",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4262749fc69c131500547765ea68cbdbb866f0bf05a4ef5d24cd8534372a39e5"
+}
