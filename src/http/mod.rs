@@ -11,7 +11,7 @@ use axum::{
     Router,
 };
 use dev::{clear_cache, clear_db, repopulate_db_from_cache, show_all_cached};
-use reqwest::Client;
+use reqwest::{Client, ClientBuilder};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -82,7 +82,9 @@ impl AppDeps {
             pool,
             ocr: OcrDeps::try_from_env()?,
             client_secret,
-            client: Client::new(),
+            client: ClientBuilder::new()
+                .use_rustls_tls()
+                .build()?,
         };
         Ok(deps)
     }
