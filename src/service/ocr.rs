@@ -62,8 +62,6 @@ pub async fn get_successful_analysis_results(
     let res = client.execute(req).await?;
     let response_bytes = res.bytes().await?;
 
-    let response_text = String::from_utf8_lossy(&response_bytes);
-    tracing::info!("Received response from API: {}", response_text);
     let parsed: AnalyzeResultOperation = serde_json::from_slice(&response_bytes)?;
     match parsed.status {
         DocumentIntelligenceOperationStatus::Succeeded => Ok(parsed),

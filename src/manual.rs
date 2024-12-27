@@ -566,7 +566,7 @@ mod tests {
             let entry = entry.unwrap();
             let path = entry.path();
             if path.is_file() {
-                tracing::info!("Parsing file: {:?}", path);
+                tracing::debug!("Parsing file: {:?}", path);
 
                 let expected_bytes = 1024 * 1024 * 3;
                 let mut buf = Vec::with_capacity(expected_bytes);
