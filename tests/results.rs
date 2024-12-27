@@ -1,11 +1,14 @@
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, collections::HashMap, hash::Hash, path::Path, time::Duration};
 
-use axum::http::{Request, StatusCode};
+use axum::{http::{Request, StatusCode}};
 use common::RequestBuilderExt as _;
-use receipt_rs::http::{app, AppDeps};
+use receipt_rs::http::{app, serve, AppDeps, WAIT_BEFORE_ASKING_FOR_RESULTS};
+use reqwest::{multipart::{Form, Part}, Url};
 use serde_json::json;
 use sqlx::PgPool;
+use tokio::{fs::File, io::AsyncReadExt};
 use tower::ServiceExt;
+use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 mod common;
 
@@ -24,4 +27,57 @@ async fn test_download_csv(db: PgPool) {
         .unwrap();
 
     assert_eq!(resp1.status(), StatusCode::NO_CONTENT);
+}
+
+async fn test_upload(client_secret: &str, path: &Path) {
+    let client = reqwest::Client::new();
+    let url = Url::parse("http://localhost:8080/upload").unwrap();
+    let request = reqwest::Request::new(reqwest::Method::POST, url);
+
+    let expected_bytes = 1024 * 1024 * 3;
+    let mut buf = Vec::with_capacity(expected_bytes);
+    File::open(path).await.expect("File open failed").read_to_end(&mut buf).await.expect("File data read failed");
+    let resp = reqwest::RequestBuilder::from_parts(client, request)
+    .bearer_auth(&client_secret)
+    .multipart(Form::new().part("receipt_photo", Part::bytes(buf)))
+    .send().await.unwrap();
+
+    tracing::info!("{:?}", resp);
+    
+    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+
+    tokio::time::sleep(WAIT_BEFORE_ASKING_FOR_RESULTS + Duration::from_secs(10)).await;
+    let client = reqwest::Client::new();
+    let url = Url::parse("http://localhost:8080/download").unwrap();
+    let request = reqwest::Request::new(reqwest::Method::GET, url);
+    let resp = reqwest::RequestBuilder::from_parts(client, request)
+    .bearer_auth(client_secret)
+    .send().await.unwrap();
+
+    tracing::info!("{:?}", resp);
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn test_upload_images(db: PgPool) {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+    
+    let deps = AppDeps::try_from_env_and_pool(db).await.unwrap();
+    let client_secret = deps.client_secret.clone();
+    tokio::spawn(serve(deps));
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    let img_dir = Path::new("tests").join("fixtures").join("receipts");
+    assert!(img_dir.is_dir());
+
+    for entry in img_dir.read_dir().unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.is_file() {
+            test_upload(&client_secret, &path).await;
+        }
+    }
 }

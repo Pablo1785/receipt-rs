@@ -1,24 +1,32 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use analysis::{download, show_all, upload};
 use anyhow::Context as _;
 use axum::{
+    error_handling::HandleErrorLayer,
     extract::{DefaultBodyLimit, FromRef, MatchedPath},
     http::Request,
+    response::Response,
     routing::{delete, get, post, put},
     Router,
 };
 use dev::{clear_db, repopulate_db_from_cache, show_all_cached};
 use reqwest::Client;
 use sqlx::{postgres::PgPoolOptions, PgPool};
-use tower_http::trace::TraceLayer;
-use tracing::info_span;
+use tower::ServiceBuilder;
+use tower_http::{
+    classify::ServerErrorsFailureClass,
+    trace::{DefaultOnFailure, OnFailure as _, TraceLayer},
+};
+use tracing::{debug_span, error_span, info_span, Span};
 
 use crate::error::AppError;
 
 mod analysis;
 mod auth;
 mod dev;
+
+pub use analysis::WAIT_BEFORE_ASKING_FOR_RESULTS;
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
 
@@ -27,22 +35,28 @@ pub struct OcrDeps {
     pub api_key: String,
     pub endpoint_url: String,
     pub model_id: String,
-
+    pub api_version: String,
 }
 
 impl OcrDeps {
     pub fn try_from_env() -> Result<Self, AppError> {
-
-
         let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
             .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
 
-            let azure_form_recognizer_endpoint_url = std::env::var("AZURE_FORM_RECOGNIZER_ENDPOINT_URL")
+        let azure_form_recognizer_endpoint_url =
+            std::env::var("AZURE_FORM_RECOGNIZER_ENDPOINT_URL")
                 .context("AZURE_FORM_RECOGNIZER_ENDPOINT_URL env var missing")?;
 
-                let azure_form_recognizer_model_id = std::env::var("AZURE_FORM_RECOGNIZER_MODEL_ID")
-                    .context("AZURE_FORM_RECOGNIZER_MODEL_ID env var missing")?;
-        Ok(OcrDeps { api_key: azure_form_recognizer_api_key, endpoint_url: azure_form_recognizer_endpoint_url, model_id: azure_form_recognizer_model_id })
+        let azure_form_recognizer_model_id = std::env::var("AZURE_FORM_RECOGNIZER_MODEL_ID")
+            .context("AZURE_FORM_RECOGNIZER_MODEL_ID env var missing")?;
+        let azure_form_recognizer_api_version = std::env::var("AZURE_FORM_RECOGNIZER_API_VERSION")
+            .context("AZURE_FORM_RECOGNIZER_API_VERSION env var missing")?;
+        Ok(OcrDeps {
+            api_key: azure_form_recognizer_api_key,
+            endpoint_url: azure_form_recognizer_endpoint_url,
+            model_id: azure_form_recognizer_model_id,
+            api_version: azure_form_recognizer_api_version,
+        })
     }
 }
 
@@ -121,21 +135,25 @@ pub fn app(deps: AppDeps) -> Router {
         )
         .route("/download", get(download).with_state(deps.clone()))
         .layer(
-            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
-                // Log the matched route's path (with placeholders not filled in).
-                // Use request.uri() or OriginalUri if you want the real path.
-                let matched_path = request
-                    .extensions()
-                    .get::<MatchedPath>()
-                    .map(MatchedPath::as_str);
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    // Log the matched route's path (with placeholders not filled in).
+                    // Use request.uri() or OriginalUri if you want the real path.
+                    let matched_path = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str);
 
-                info_span!(
-                    "http_request",
-                    method = ?request.method(),
-                    matched_path,
-                    some_other_field = tracing::field::Empty,
-                )
-            }),
+                    debug_span!(
+                        "http_request",
+                        method = ?request.method(),
+                        matched_path,
+                        status_code = tracing::field::Empty,
+                        error_msg = tracing::field::Empty,
+                        duration_ms = tracing::field::Empty,
+                    )
+                })
+                .on_failure(()),
         )
         .layer(axum::middleware::from_fn_with_state(
             deps.clone(),
@@ -155,4 +173,16 @@ pub async fn serve(deps: AppDeps) -> Result<(), AppError> {
         .await
         .context("Server must always start listening")?;
     Ok(())
+}
+
+pub async fn handle_app_error(err: AppError) -> (axum::http::StatusCode, String) {
+    match err {
+        error @ _ => {
+            tracing::error!("HTTP client error: {}", error);
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("HTTP client error: {}", error),
+            )
+        }
+    }
 }

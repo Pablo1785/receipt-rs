@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-bookworm AS chef
 WORKDIR /app
 
 FROM chef AS planner
@@ -15,6 +15,7 @@ RUN cargo build --release --bin receipt-rs
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt install -y openssl
 WORKDIR /app
 COPY --from=builder /app/target/release/receipt-rs /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/receipt-rs"]

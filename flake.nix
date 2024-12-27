@@ -24,7 +24,7 @@
           ]; 
           shellHook = ''
           set -a
-          source .env
+          source .env.local
           set +a
           '';
         };

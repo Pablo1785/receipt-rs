@@ -41,7 +41,6 @@ pub async fn repopulate_db_from_cache(
             ..
         } in raw_results
         {
-            tokio::time::sleep(Duration::from_secs(1)).await; // TODO: Find a way to change shuttle-rs acquire_timeout option for PgPool to avoid timeout errors
             let pool = pool_ptr.clone();
             tokio::spawn(async move {
                 let res = serde_json::from_str(&result_json).map_err(AppError::from);

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context as _};
 use axum::extract::{FromRef, Multipart, State};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use reqwest::Client;
@@ -10,7 +10,7 @@ use sqlx::PgPool;
 use crate::{
     error::AppError,
     service::{
-        ocr::{analyze_file, get_analysis_results},
+        ocr::{analyze_file, get_successful_analysis_results},
         process_analysis_results,
     },
 };
@@ -41,10 +41,12 @@ impl FromRef<Arc<AppDeps>> for UploadDeps {
     }
 }
 
+pub const WAIT_BEFORE_ASKING_FOR_RESULTS: Duration = Duration::from_secs(1);
+
 pub async fn upload(
     State(app_state): State<UploadDeps>,
     mut multipart: Multipart,
-) -> Result<String, AppError> {
+) -> Result<axum::http::StatusCode, AppError> {
     let Some(field) = multipart.next_field().await? else {
         return Err(AppError::Anyhow(anyhow!(
             "No file was submitted for analysis"
@@ -82,7 +84,13 @@ pub async fn upload(
     let base64_file = BASE64_STANDARD.encode(data);
 
     tracing::info!("New file detected, starting analysis...");
-    let res = analyze_file(&base64_file, &app_state.ocr, &app_state.client).await?;
+    let res = analyze_file(&base64_file, &app_state.ocr, &app_state.client).await;
+
+    if let Err(err) = res {
+        tracing::error!("Error received from analysis API");
+        return Err(err.into());
+    }
+    let res = res.unwrap();
     tracing::info!("Successfully received response from analysis API. Processing...");
 
     let reqwest::StatusCode::ACCEPTED = res.status() else {
@@ -97,23 +105,43 @@ pub async fn upload(
         .ok_or(anyhow!(
             "Missing Operation-Location in response header. This should never happen"
         ))?
-        .to_str()?
+        .to_str()
+        .with_context(|| anyhow!(
+            "Could not parse Operation-Location in response header. This should never happen"
+        ))?
         .to_string();
     let msg =
         format!("Successfully queued image analysis. Result will be available at: {result_url}");
     tracing::info!(msg);
     tokio::spawn(async move {
         tracing::info!("Waiting before asking for results...");
-        tokio::time::sleep(Duration::from_secs(30)).await;
+        tokio::time::sleep(WAIT_BEFORE_ASKING_FOR_RESULTS).await;
         tracing::info!("Requesting results...");
-        let res = get_analysis_results(&result_url, &app_state.ocr, &app_state.client).await;
-        tracing::info!("Received response from API. Processing...");
-        let process_res = match res {
-            Ok(success_res) => {
-                process_analysis_results(&file_hash, success_res, &app_state.pool).await
-            }
-            Err(err) => Err(err.into()),
+
+        let mut retries = 3;
+        let mut wait_secs = 1;
+        let process_res = loop {
+            let res = get_successful_analysis_results(&result_url, &app_state.ocr, &app_state.client).await;
+            tracing::info!("Received response from API. Processing...");
+             match res {
+                Ok(success_res) => {
+                    break process_analysis_results(&file_hash, success_res, &app_state.pool).await
+                }
+                Err(err) => match err {
+                    crate::service::ocr::AnalysisError::InProgress if retries > 0 => {
+                        retries -= 1;
+                        tracing::info!(
+                            "Analysis is still in progress. Retrying in {} seconds...",
+                            wait_secs
+                        );
+                        tokio::time::sleep(Duration::from_secs(wait_secs)).await;
+                        wait_secs *= 2;
+                    },
+                    err @ _ => break Err(err.into()),
+                },
+            };
         };
+        
         if let Err(err) = process_res {
             tracing::error!(
                 "Error when processing analysis results: {}",
@@ -123,7 +151,7 @@ pub async fn upload(
             tracing::info!("Successfully processed analysis results");
         }
     });
-    Ok(msg)
+    Ok(axum::http::StatusCode::ACCEPTED)
 }
 
 #[derive(Serialize, Deserialize)]

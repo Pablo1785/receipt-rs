@@ -269,8 +269,19 @@ pub struct AnalyzeResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentIntelligenceOperationStatus {
+    Canceled,
+    Failed,
+    NotStarted,
+    Running,
+    Skipped,
+    Succeeded,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AnalyzeResultOperation {
-    pub status: String,
+    pub status: DocumentIntelligenceOperationStatus,
     pub createdDateTime: chrono::DateTime<chrono::FixedOffset>,
     pub lastUpdatedDateTime: chrono::DateTime<chrono::FixedOffset>,
     pub error: Option<serde_json::Value>, // Represents a dynamic JSON structure for Error type
@@ -278,6 +289,7 @@ pub struct AnalyzeResultOperation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentField {
     #[serde(rename = "type")]
     pub field_type: DocumentFieldType,
@@ -347,7 +359,19 @@ pub enum DocumentSignatureType {
     Unsigned,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrencyObject {
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub value_currency: CurrencyValue,
+    pub content: String,
+    pub bounding_regions: Vec<BoundingRegion>,
+    pub confidence: f64,
+    pub spans: Vec<Span>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct CurrencyValue {
     pub amount: f64,
     pub currencySymbol: Option<String>,
@@ -378,15 +402,15 @@ pub struct AddressValue {
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     #[serde(rename = "Items")]
-    pub items: Items,
+    pub items: Option<Items>,
     #[serde(rename = "MerchantName")]
     pub merchant_name: StringObject,
     #[serde(rename = "TaxDetails")]
-    pub tax_details: TaxDetails,
+    pub tax_details: Option<TaxDetails>,
     #[serde(rename = "Total")]
-    pub total: NumberObject,
+    pub total: CurrencyObject,
     #[serde(rename = "TotalTax")]
-    pub total_tax: NumberObject,
+    pub total_tax: Option<CurrencyObject>,
     #[serde(rename = "TransactionDate")]
     pub transaction_date: DateObject,
     #[serde(rename = "TransactionTime")]
@@ -406,7 +430,7 @@ pub struct Items {
 pub struct ValueArray {
     #[serde(rename = "type")]
     pub type_field: String,
-    pub value_object: ValueObject,
+    pub value_object: PurchasedItem,
     pub content: String,
     pub bounding_regions: Vec<BoundingRegion>,
     pub confidence: f64,
@@ -415,15 +439,15 @@ pub struct ValueArray {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValueObject {
+pub struct PurchasedItem {
     #[serde(rename = "Description")]
     pub description: StringObject,
     #[serde(rename = "TotalPrice")]
-    pub total_price: Option<NumberObject>,
+    pub total_price: Option<CurrencyObject>,
     #[serde(rename = "Quantity")]
     pub quantity: Option<NumberObject>,
     #[serde(rename = "Price")]
-    pub unit_price: Option<NumberObject>,
+    pub unit_price: Option<CurrencyObject>,
     #[serde(rename = "ProductCode")]
     pub product_code: Option<StringObject>,
     #[serde(rename = "QuantityUnit")]
@@ -466,15 +490,15 @@ pub struct NumberObject {
 pub struct TaxDetails {
     #[serde(rename = "type")]
     pub type_field: String,
-    pub value_array: Vec<ValueArray2>,
+    pub value_array: Vec<TaxArray>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValueArray2 {
+pub struct TaxArray {
     #[serde(rename = "type")]
     pub type_field: String,
-    pub value_object: ValueObject2,
+    pub value_object: TaxEntry,
     pub content: String,
     pub bounding_regions: Vec<BoundingRegion>,
     pub confidence: f64,
@@ -483,27 +507,13 @@ pub struct ValueArray2 {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ValueObject2 {
+pub struct TaxEntry {
     #[serde(rename = "Amount")]
-    pub amount: Amount,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Amount {
-    #[serde(rename = "type")]
-    pub type_field: String,
-    pub value_currency: ValueCurrency,
-    pub content: String,
-    pub bounding_regions: Vec<BoundingRegion>,
-    pub confidence: f64,
-    pub spans: Vec<Span>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ValueCurrency {
-    pub amount: f64,
+    pub amount: Option<CurrencyObject>,
+    #[serde(rename = "Description")]
+    pub description: Option<StringObject>,
+    #[serde(rename = "Rate")]
+    pub rate: Option<NumberObject>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -539,21 +549,31 @@ pub struct BoundingRegion {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn parse_receipt_analysis_results() {
-        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response1.json"))
-            .unwrap();
-    }
+    use std::{fs::File, io::Read, path::Path};
+
+    use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
     #[test]
-    fn parse_other_receipt_analysis_results() {
-        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response2.json"))
-            .unwrap();
-    }
+    fn parse_api_v_2024_11_30_receipt_analysis_results() {
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+        
+        let img_dir = Path::new(".").parent().expect("Must have a parent dir").join("tests").join("fixtures").join("analysis_results");
+        assert!(img_dir.is_dir());
 
-    #[test]
-    fn parse_another_receipt_analysis_results() {
-        serde_json::from_str::<super::AnalyzeResultOperation>(include_str!("../response3.json"))
-            .unwrap();
+        for entry in img_dir.read_dir().unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_file() {
+                tracing::info!("Parsing file: {:?}", path);
+
+                let expected_bytes = 1024 * 1024 * 3;
+                let mut buf = Vec::with_capacity(expected_bytes);
+                File::open(path).expect("File open failed").read_to_end(&mut buf).expect("File data read failed");
+                serde_json::from_slice::<super::AnalyzeResultOperation>(&buf)
+                .unwrap();
+            }
+        }
     }
 }

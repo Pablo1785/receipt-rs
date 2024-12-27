@@ -34,14 +34,17 @@ pub enum AppError {
     EnvVar(#[from] std::env::VarError),
     #[error(transparent)]
     Migrate(#[from] MigrateError),
+    #[error(transparent)]
+    Analysis(#[from] crate::service::ocr::AnalysisError),
 }
 
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
+        tracing::error!("Error: {}", self.to_string());
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.to_string()),
+            "Something went wrong on our side",
         )
             .into_response()
     }

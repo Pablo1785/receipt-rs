@@ -1,0 +1,2011 @@
+{
+    "status": "succeeded",
+    "createdDateTime": "2024-12-27T19:57:29Z",
+    "lastUpdatedDateTime": "2024-12-27T19:57:29Z",
+    "analyzeResult": {
+        "apiVersion": "2024-11-30",
+        "modelId": "prebuilt-receipt",
+        "stringIndexType": "textElements",
+        "content": "M\nDate:\n07-09-2023\nTime:\n17:45\nTerminal:\n041005\nStation:\nVibenshus Runddel St.\nCompany:\nMetro\nCVR no .:\n30823699\nReceipt for purchase of rejsekort\nRejsekort number:\n308430 206 877 475 4\nPrice for rejsekort:\nDKK\n80.00\nInitial balance:\nDKK\n200.00\nTotal price:\nDKK\n280.00\nYour rejsekort anonymous expires 5 years\nafter the card is issued. Card issuer is\nRejsekort & Rejseplan A/S,\nAutomatikvej 1, 2860 Søborg.\nE-mail: administration@rejsekort.dk\n04100507092023174501",
+        "pages": [
+            {
+                "pageNumber": 1,
+                "angle": -0.030899999663233757,
+                "width": 1908,
+                "height": 4032,
+                "unit": "pixel",
+                "words": [
+                    {
+                        "content": "M",
+                        "polygon": [
+                            621,
+                            841,
+                            1020,
+                            844,
+                            1020,
+                            1110,
+                            620,
+                            1120
+                        ],
+                        "confidence": 0.924,
+                        "span": {
+                            "offset": 0,
+                            "length": 1
+                        }
+                    },
+                    {
+                        "content": "Date:",
+                        "polygon": [
+                            201,
+                            1202,
+                            354,
+                            1202,
+                            354,
+                            1251,
+                            201,
+                            1251
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 2,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "07-09-2023",
+                        "polygon": [
+                            1139,
+                            1197,
+                            1462,
+                            1192,
+                            1462,
+                            1247,
+                            1139,
+                            1251
+                        ],
+                        "confidence": 0.997,
+                        "span": {
+                            "offset": 8,
+                            "length": 10
+                        }
+                    },
+                    {
+                        "content": "Time:",
+                        "polygon": [
+                            203,
+                            1285,
+                            363,
+                            1284,
+                            363,
+                            1335,
+                            203,
+                            1335
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 19,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "17:45",
+                        "polygon": [
+                            1304,
+                            1280,
+                            1463,
+                            1278,
+                            1463,
+                            1331,
+                            1304,
+                            1333
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 25,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "Terminal:",
+                        "polygon": [
+                            201,
+                            1369,
+                            477,
+                            1367,
+                            477,
+                            1422,
+                            201,
+                            1422
+                        ],
+                        "confidence": 0.977,
+                        "span": {
+                            "offset": 31,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "041005",
+                        "polygon": [
+                            1257,
+                            1369,
+                            1465,
+                            1366,
+                            1465,
+                            1420,
+                            1257,
+                            1422
+                        ],
+                        "confidence": 0.997,
+                        "span": {
+                            "offset": 41,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "Station:",
+                        "polygon": [
+                            200,
+                            1457,
+                            428,
+                            1455,
+                            428,
+                            1509,
+                            201,
+                            1511
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 48,
+                            "length": 8
+                        }
+                    },
+                    {
+                        "content": "Vibenshus",
+                        "polygon": [
+                            786,
+                            1453,
+                            1093,
+                            1454,
+                            1093,
+                            1513,
+                            786,
+                            1512
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 57,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "Runddel",
+                        "polygon": [
+                            1120,
+                            1454,
+                            1361,
+                            1453,
+                            1362,
+                            1513,
+                            1121,
+                            1513
+                        ],
+                        "confidence": 0.985,
+                        "span": {
+                            "offset": 67,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "St.",
+                        "polygon": [
+                            1387,
+                            1453,
+                            1459,
+                            1453,
+                            1459,
+                            1512,
+                            1388,
+                            1512
+                        ],
+                        "confidence": 0.889,
+                        "span": {
+                            "offset": 75,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "Company:",
+                        "polygon": [
+                            199,
+                            1546,
+                            499,
+                            1547,
+                            499,
+                            1604,
+                            199,
+                            1604
+                        ],
+                        "confidence": 0.973,
+                        "span": {
+                            "offset": 79,
+                            "length": 8
+                        }
+                    },
+                    {
+                        "content": "Metro",
+                        "polygon": [
+                            1292,
+                            1544,
+                            1467,
+                            1543,
+                            1467,
+                            1595,
+                            1292,
+                            1595
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 88,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "CVR",
+                        "polygon": [
+                            199,
+                            1630,
+                            322,
+                            1630,
+                            322,
+                            1683,
+                            200,
+                            1684
+                        ],
+                        "confidence": 0.997,
+                        "span": {
+                            "offset": 94,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "no",
+                        "polygon": [
+                            350,
+                            1629,
+                            408,
+                            1629,
+                            409,
+                            1682,
+                            350,
+                            1683
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 98,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": ".:",
+                        "polygon": [
+                            419,
+                            1628,
+                            460,
+                            1628,
+                            460,
+                            1682,
+                            419,
+                            1682
+                        ],
+                        "confidence": 0.935,
+                        "span": {
+                            "offset": 101,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": "30823699",
+                        "polygon": [
+                            1191,
+                            1627,
+                            1468,
+                            1627,
+                            1468,
+                            1681,
+                            1191,
+                            1681
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 104,
+                            "length": 8
+                        }
+                    },
+                    {
+                        "content": "Receipt",
+                        "polygon": [
+                            353,
+                            1803,
+                            575,
+                            1800,
+                            576,
+                            1864,
+                            353,
+                            1866
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 113,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "for",
+                        "polygon": [
+                            598,
+                            1799,
+                            677,
+                            1799,
+                            678,
+                            1864,
+                            599,
+                            1864
+                        ],
+                        "confidence": 0.993,
+                        "span": {
+                            "offset": 121,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "purchase",
+                        "polygon": [
+                            699,
+                            1799,
+                            971,
+                            1797,
+                            971,
+                            1861,
+                            700,
+                            1864
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 125,
+                            "length": 8
+                        }
+                    },
+                    {
+                        "content": "of",
+                        "polygon": [
+                            996,
+                            1796,
+                            1050,
+                            1797,
+                            1050,
+                            1861,
+                            997,
+                            1861
+                        ],
+                        "confidence": 0.981,
+                        "span": {
+                            "offset": 134,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": "rejsekort",
+                        "polygon": [
+                            1073,
+                            1796,
+                            1326,
+                            1797,
+                            1326,
+                            1859,
+                            1073,
+                            1861
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 137,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "Rejsekort",
+                        "polygon": [
+                            222,
+                            1988,
+                            494,
+                            1983,
+                            494,
+                            2043,
+                            223,
+                            2050
+                        ],
+                        "confidence": 0.962,
+                        "span": {
+                            "offset": 147,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "number:",
+                        "polygon": [
+                            517,
+                            1983,
+                            757,
+                            1979,
+                            757,
+                            2039,
+                            517,
+                            2042
+                        ],
+                        "confidence": 0.989,
+                        "span": {
+                            "offset": 157,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "308430",
+                        "polygon": [
+                            843,
+                            1968,
+                            1052,
+                            1969,
+                            1052,
+                            2030,
+                            843,
+                            2029
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 165,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "206",
+                        "polygon": [
+                            1078,
+                            1969,
+                            1177,
+                            1970,
+                            1176,
+                            2031,
+                            1078,
+                            2030
+                        ],
+                        "confidence": 0.998,
+                        "span": {
+                            "offset": 172,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "877",
+                        "polygon": [
+                            1203,
+                            1970,
+                            1301,
+                            1970,
+                            1301,
+                            2031,
+                            1203,
+                            2031
+                        ],
+                        "confidence": 0.993,
+                        "span": {
+                            "offset": 176,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "475",
+                        "polygon": [
+                            1324,
+                            1970,
+                            1424,
+                            1971,
+                            1424,
+                            2033,
+                            1324,
+                            2031
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 180,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "4",
+                        "polygon": [
+                            1447,
+                            1971,
+                            1482,
+                            1971,
+                            1482,
+                            2033,
+                            1447,
+                            2033
+                        ],
+                        "confidence": 0.988,
+                        "span": {
+                            "offset": 184,
+                            "length": 1
+                        }
+                    },
+                    {
+                        "content": "Price",
+                        "polygon": [
+                            245,
+                            2152,
+                            384,
+                            2151,
+                            384,
+                            2211,
+                            245,
+                            2210
+                        ],
+                        "confidence": 0.993,
+                        "span": {
+                            "offset": 186,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "for",
+                        "polygon": [
+                            406,
+                            2151,
+                            485,
+                            2152,
+                            485,
+                            2211,
+                            407,
+                            2211
+                        ],
+                        "confidence": 0.988,
+                        "span": {
+                            "offset": 192,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "rejsekort:",
+                        "polygon": [
+                            506,
+                            2152,
+                            781,
+                            2150,
+                            781,
+                            2210,
+                            506,
+                            2211
+                        ],
+                        "confidence": 0.977,
+                        "span": {
+                            "offset": 196,
+                            "length": 10
+                        }
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            974,
+                            2150,
+                            1106,
+                            2149,
+                            1106,
+                            2206,
+                            974,
+                            2207
+                        ],
+                        "confidence": 0.974,
+                        "span": {
+                            "offset": 207,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "80.00",
+                        "polygon": [
+                            1322,
+                            2152,
+                            1476,
+                            2151,
+                            1476,
+                            2206,
+                            1323,
+                            2206
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 211,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "Initial",
+                        "polygon": [
+                            218,
+                            2320,
+                            371,
+                            2321,
+                            370,
+                            2377,
+                            218,
+                            2376
+                        ],
+                        "confidence": 0.915,
+                        "span": {
+                            "offset": 217,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "balance:",
+                        "polygon": [
+                            393,
+                            2321,
+                            638,
+                            2324,
+                            638,
+                            2379,
+                            393,
+                            2378
+                        ],
+                        "confidence": 0.963,
+                        "span": {
+                            "offset": 225,
+                            "length": 8
+                        }
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            976,
+                            2328,
+                            1109,
+                            2328,
+                            1109,
+                            2386,
+                            976,
+                            2386
+                        ],
+                        "confidence": 0.993,
+                        "span": {
+                            "offset": 234,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "200.00",
+                        "polygon": [
+                            1296,
+                            2329,
+                            1486,
+                            2329,
+                            1486,
+                            2385,
+                            1296,
+                            2385
+                        ],
+                        "confidence": 0.997,
+                        "span": {
+                            "offset": 238,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "Total",
+                        "polygon": [
+                            203,
+                            2584,
+                            350,
+                            2587,
+                            349,
+                            2654,
+                            203,
+                            2651
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 245,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "price:",
+                        "polygon": [
+                            376,
+                            2588,
+                            542,
+                            2592,
+                            542,
+                            2657,
+                            375,
+                            2654
+                        ],
+                        "confidence": 0.973,
+                        "span": {
+                            "offset": 251,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            975,
+                            2600,
+                            1110,
+                            2600,
+                            1110,
+                            2660,
+                            975,
+                            2660
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 258,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "280.00",
+                        "polygon": [
+                            1301,
+                            2599,
+                            1494,
+                            2600,
+                            1494,
+                            2656,
+                            1301,
+                            2657
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 262,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "Your",
+                        "polygon": [
+                            209,
+                            2855,
+                            340,
+                            2860,
+                            339,
+                            2931,
+                            208,
+                            2925
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 269,
+                            "length": 4
+                        }
+                    },
+                    {
+                        "content": "rejsekort",
+                        "polygon": [
+                            354,
+                            2860,
+                            632,
+                            2870,
+                            631,
+                            2942,
+                            353,
+                            2932
+                        ],
+                        "confidence": 0.984,
+                        "span": {
+                            "offset": 274,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "anonymous",
+                        "polygon": [
+                            655,
+                            2870,
+                            1012,
+                            2877,
+                            1012,
+                            2950,
+                            654,
+                            2942
+                        ],
+                        "confidence": 0.989,
+                        "span": {
+                            "offset": 284,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "expires",
+                        "polygon": [
+                            1036,
+                            2877,
+                            1255,
+                            2878,
+                            1255,
+                            2950,
+                            1035,
+                            2950
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 294,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "5",
+                        "polygon": [
+                            1285,
+                            2879,
+                            1311,
+                            2879,
+                            1311,
+                            2950,
+                            1285,
+                            2950
+                        ],
+                        "confidence": 0.995,
+                        "span": {
+                            "offset": 302,
+                            "length": 1
+                        }
+                    },
+                    {
+                        "content": "years",
+                        "polygon": [
+                            1335,
+                            2879,
+                            1497,
+                            2878,
+                            1497,
+                            2948,
+                            1335,
+                            2949
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 304,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "after",
+                        "polygon": [
+                            208,
+                            2956,
+                            342,
+                            2960,
+                            340,
+                            3026,
+                            207,
+                            3021
+                        ],
+                        "confidence": 0.989,
+                        "span": {
+                            "offset": 310,
+                            "length": 5
+                        }
+                    },
+                    {
+                        "content": "the",
+                        "polygon": [
+                            365,
+                            2961,
+                            454,
+                            2963,
+                            453,
+                            3030,
+                            364,
+                            3027
+                        ],
+                        "confidence": 0.996,
+                        "span": {
+                            "offset": 316,
+                            "length": 3
+                        }
+                    },
+                    {
+                        "content": "card",
+                        "polygon": [
+                            478,
+                            2964,
+                            606,
+                            2966,
+                            605,
+                            3035,
+                            476,
+                            3031
+                        ],
+                        "confidence": 0.993,
+                        "span": {
+                            "offset": 320,
+                            "length": 4
+                        }
+                    },
+                    {
+                        "content": "is",
+                        "polygon": [
+                            631,
+                            2967,
+                            677,
+                            2968,
+                            676,
+                            3036,
+                            630,
+                            3036
+                        ],
+                        "confidence": 0.995,
+                        "span": {
+                            "offset": 325,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": "issued.",
+                        "polygon": [
+                            702,
+                            2968,
+                            917,
+                            2972,
+                            916,
+                            3041,
+                            701,
+                            3037
+                        ],
+                        "confidence": 0.963,
+                        "span": {
+                            "offset": 328,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "Card",
+                        "polygon": [
+                            944,
+                            2973,
+                            1086,
+                            2974,
+                            1086,
+                            3042,
+                            944,
+                            3042
+                        ],
+                        "confidence": 0.991,
+                        "span": {
+                            "offset": 336,
+                            "length": 4
+                        }
+                    },
+                    {
+                        "content": "issuer",
+                        "polygon": [
+                            1111,
+                            2975,
+                            1297,
+                            2976,
+                            1297,
+                            3042,
+                            1111,
+                            3042
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 341,
+                            "length": 6
+                        }
+                    },
+                    {
+                        "content": "is",
+                        "polygon": [
+                            1319,
+                            2976,
+                            1366,
+                            2976,
+                            1366,
+                            3042,
+                            1319,
+                            3042
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 348,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": "Rejsekort",
+                        "polygon": [
+                            207,
+                            3052,
+                            493,
+                            3060,
+                            492,
+                            3132,
+                            206,
+                            3123
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 351,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "&",
+                        "polygon": [
+                            520,
+                            3061,
+                            555,
+                            3061,
+                            554,
+                            3135,
+                            519,
+                            3133
+                        ],
+                        "confidence": 0.988,
+                        "span": {
+                            "offset": 361,
+                            "length": 1
+                        }
+                    },
+                    {
+                        "content": "Rejseplan",
+                        "polygon": [
+                            581,
+                            3062,
+                            878,
+                            3072,
+                            877,
+                            3143,
+                            580,
+                            3135
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 363,
+                            "length": 9
+                        }
+                    },
+                    {
+                        "content": "A/S,",
+                        "polygon": [
+                            898,
+                            3073,
+                            1021,
+                            3075,
+                            1021,
+                            3145,
+                            897,
+                            3144
+                        ],
+                        "confidence": 0.963,
+                        "span": {
+                            "offset": 373,
+                            "length": 4
+                        }
+                    },
+                    {
+                        "content": "Automatikvej",
+                        "polygon": [
+                            205,
+                            3153,
+                            601,
+                            3161,
+                            600,
+                            3231,
+                            204,
+                            3217
+                        ],
+                        "confidence": 0.957,
+                        "span": {
+                            "offset": 378,
+                            "length": 12
+                        }
+                    },
+                    {
+                        "content": "1,",
+                        "polygon": [
+                            628,
+                            3162,
+                            671,
+                            3163,
+                            670,
+                            3234,
+                            627,
+                            3232
+                        ],
+                        "confidence": 0.994,
+                        "span": {
+                            "offset": 391,
+                            "length": 2
+                        }
+                    },
+                    {
+                        "content": "2860",
+                        "polygon": [
+                            698,
+                            3164,
+                            835,
+                            3168,
+                            834,
+                            3238,
+                            697,
+                            3234
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 394,
+                            "length": 4
+                        }
+                    },
+                    {
+                        "content": "Søborg.",
+                        "polygon": [
+                            859,
+                            3169,
+                            1098,
+                            3177,
+                            1098,
+                            3244,
+                            858,
+                            3239
+                        ],
+                        "confidence": 0.989,
+                        "span": {
+                            "offset": 399,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "E-mail:",
+                        "polygon": [
+                            207,
+                            3251,
+                            414,
+                            3256,
+                            413,
+                            3325,
+                            206,
+                            3318
+                        ],
+                        "confidence": 0.984,
+                        "span": {
+                            "offset": 407,
+                            "length": 7
+                        }
+                    },
+                    {
+                        "content": "administration@rejsekort.dk",
+                        "polygon": [
+                            438,
+                            3257,
+                            1303,
+                            3270,
+                            1303,
+                            3338,
+                            437,
+                            3326
+                        ],
+                        "confidence": 0.913,
+                        "span": {
+                            "offset": 415,
+                            "length": 27
+                        }
+                    },
+                    {
+                        "content": "04100507092023174501",
+                        "polygon": [
+                            463,
+                            3432,
+                            1168,
+                            3444,
+                            1168,
+                            3502,
+                            462,
+                            3490
+                        ],
+                        "confidence": 0.992,
+                        "span": {
+                            "offset": 443,
+                            "length": 20
+                        }
+                    }
+                ],
+                "lines": [
+                    {
+                        "content": "M",
+                        "polygon": [
+                            621,
+                            840,
+                            1020,
+                            842,
+                            1019,
+                            1120,
+                            620,
+                            1119
+                        ],
+                        "spans": [
+                            {
+                                "offset": 0,
+                                "length": 1
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Date:",
+                        "polygon": [
+                            201,
+                            1202,
+                            354,
+                            1202,
+                            354,
+                            1250,
+                            201,
+                            1250
+                        ],
+                        "spans": [
+                            {
+                                "offset": 2,
+                                "length": 5
+                            }
+                        ]
+                    },
+                    {
+                        "content": "07-09-2023",
+                        "polygon": [
+                            1138,
+                            1197,
+                            1461,
+                            1192,
+                            1462,
+                            1247,
+                            1139,
+                            1251
+                        ],
+                        "spans": [
+                            {
+                                "offset": 8,
+                                "length": 10
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Time:",
+                        "polygon": [
+                            203,
+                            1285,
+                            362,
+                            1284,
+                            362,
+                            1334,
+                            203,
+                            1335
+                        ],
+                        "spans": [
+                            {
+                                "offset": 19,
+                                "length": 5
+                            }
+                        ]
+                    },
+                    {
+                        "content": "17:45",
+                        "polygon": [
+                            1304,
+                            1280,
+                            1462,
+                            1278,
+                            1463,
+                            1332,
+                            1304,
+                            1333
+                        ],
+                        "spans": [
+                            {
+                                "offset": 25,
+                                "length": 5
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Terminal:",
+                        "polygon": [
+                            201,
+                            1368,
+                            476,
+                            1367,
+                            476,
+                            1421,
+                            201,
+                            1422
+                        ],
+                        "spans": [
+                            {
+                                "offset": 31,
+                                "length": 9
+                            }
+                        ]
+                    },
+                    {
+                        "content": "041005",
+                        "polygon": [
+                            1256,
+                            1369,
+                            1464,
+                            1366,
+                            1465,
+                            1419,
+                            1257,
+                            1422
+                        ],
+                        "spans": [
+                            {
+                                "offset": 41,
+                                "length": 6
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Station:",
+                        "polygon": [
+                            200,
+                            1457,
+                            428,
+                            1455,
+                            428,
+                            1509,
+                            201,
+                            1511
+                        ],
+                        "spans": [
+                            {
+                                "offset": 48,
+                                "length": 8
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Vibenshus Runddel St.",
+                        "polygon": [
+                            786,
+                            1453,
+                            1459,
+                            1453,
+                            1459,
+                            1512,
+                            786,
+                            1512
+                        ],
+                        "spans": [
+                            {
+                                "offset": 57,
+                                "length": 21
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Company:",
+                        "polygon": [
+                            199,
+                            1545,
+                            498,
+                            1546,
+                            498,
+                            1604,
+                            199,
+                            1603
+                        ],
+                        "spans": [
+                            {
+                                "offset": 79,
+                                "length": 8
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Metro",
+                        "polygon": [
+                            1292,
+                            1544,
+                            1466,
+                            1543,
+                            1466,
+                            1594,
+                            1292,
+                            1595
+                        ],
+                        "spans": [
+                            {
+                                "offset": 88,
+                                "length": 5
+                            }
+                        ]
+                    },
+                    {
+                        "content": "CVR no .:",
+                        "polygon": [
+                            199,
+                            1630,
+                            460,
+                            1628,
+                            460,
+                            1682,
+                            200,
+                            1684
+                        ],
+                        "spans": [
+                            {
+                                "offset": 94,
+                                "length": 9
+                            }
+                        ]
+                    },
+                    {
+                        "content": "30823699",
+                        "polygon": [
+                            1191,
+                            1627,
+                            1468,
+                            1626,
+                            1468,
+                            1680,
+                            1191,
+                            1681
+                        ],
+                        "spans": [
+                            {
+                                "offset": 104,
+                                "length": 8
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Receipt for purchase of rejsekort",
+                        "polygon": [
+                            353,
+                            1801,
+                            1326,
+                            1795,
+                            1326,
+                            1859,
+                            353,
+                            1866
+                        ],
+                        "spans": [
+                            {
+                                "offset": 113,
+                                "length": 33
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Rejsekort number:",
+                        "polygon": [
+                            222,
+                            1987,
+                            756,
+                            1978,
+                            757,
+                            2038,
+                            223,
+                            2049
+                        ],
+                        "spans": [
+                            {
+                                "offset": 147,
+                                "length": 17
+                            }
+                        ]
+                    },
+                    {
+                        "content": "308430 206 877 475 4",
+                        "polygon": [
+                            843,
+                            1968,
+                            1482,
+                            1971,
+                            1482,
+                            2032,
+                            842,
+                            2029
+                        ],
+                        "spans": [
+                            {
+                                "offset": 165,
+                                "length": 20
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Price for rejsekort:",
+                        "polygon": [
+                            244,
+                            2152,
+                            781,
+                            2149,
+                            781,
+                            2209,
+                            245,
+                            2211
+                        ],
+                        "spans": [
+                            {
+                                "offset": 186,
+                                "length": 20
+                            }
+                        ]
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            974,
+                            2149,
+                            1106,
+                            2149,
+                            1106,
+                            2206,
+                            974,
+                            2206
+                        ],
+                        "spans": [
+                            {
+                                "offset": 207,
+                                "length": 3
+                            }
+                        ]
+                    },
+                    {
+                        "content": "80.00",
+                        "polygon": [
+                            1322,
+                            2152,
+                            1475,
+                            2151,
+                            1475,
+                            2205,
+                            1323,
+                            2206
+                        ],
+                        "spans": [
+                            {
+                                "offset": 211,
+                                "length": 5
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Initial balance:",
+                        "polygon": [
+                            218,
+                            2319,
+                            638,
+                            2324,
+                            638,
+                            2379,
+                            218,
+                            2375
+                        ],
+                        "spans": [
+                            {
+                                "offset": 217,
+                                "length": 16
+                            }
+                        ]
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            976,
+                            2328,
+                            1109,
+                            2328,
+                            1109,
+                            2386,
+                            976,
+                            2386
+                        ],
+                        "spans": [
+                            {
+                                "offset": 234,
+                                "length": 3
+                            }
+                        ]
+                    },
+                    {
+                        "content": "200.00",
+                        "polygon": [
+                            1296,
+                            2329,
+                            1485,
+                            2329,
+                            1485,
+                            2384,
+                            1296,
+                            2384
+                        ],
+                        "spans": [
+                            {
+                                "offset": 238,
+                                "length": 6
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Total price:",
+                        "polygon": [
+                            203,
+                            2584,
+                            542,
+                            2592,
+                            541,
+                            2657,
+                            202,
+                            2650
+                        ],
+                        "spans": [
+                            {
+                                "offset": 245,
+                                "length": 12
+                            }
+                        ]
+                    },
+                    {
+                        "content": "DKK",
+                        "polygon": [
+                            975,
+                            2600,
+                            1109,
+                            2600,
+                            1109,
+                            2659,
+                            974,
+                            2659
+                        ],
+                        "spans": [
+                            {
+                                "offset": 258,
+                                "length": 3
+                            }
+                        ]
+                    },
+                    {
+                        "content": "280.00",
+                        "polygon": [
+                            1301,
+                            2599,
+                            1493,
+                            2599,
+                            1493,
+                            2657,
+                            1301,
+                            2656
+                        ],
+                        "spans": [
+                            {
+                                "offset": 262,
+                                "length": 6
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Your rejsekort anonymous expires 5 years",
+                        "polygon": [
+                            209,
+                            2855,
+                            1497,
+                            2878,
+                            1496,
+                            2950,
+                            207,
+                            2934
+                        ],
+                        "spans": [
+                            {
+                                "offset": 269,
+                                "length": 40
+                            }
+                        ]
+                    },
+                    {
+                        "content": "after the card is issued. Card issuer is",
+                        "polygon": [
+                            208,
+                            2956,
+                            1366,
+                            2976,
+                            1366,
+                            3042,
+                            206,
+                            3027
+                        ],
+                        "spans": [
+                            {
+                                "offset": 310,
+                                "length": 40
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Rejsekort & Rejseplan A/S,",
+                        "polygon": [
+                            207,
+                            3052,
+                            1021,
+                            3075,
+                            1020,
+                            3145,
+                            206,
+                            3124
+                        ],
+                        "spans": [
+                            {
+                                "offset": 351,
+                                "length": 26
+                            }
+                        ]
+                    },
+                    {
+                        "content": "Automatikvej 1, 2860 Søborg.",
+                        "polygon": [
+                            205,
+                            3152,
+                            1098,
+                            3175,
+                            1096,
+                            3244,
+                            203,
+                            3219
+                        ],
+                        "spans": [
+                            {
+                                "offset": 378,
+                                "length": 28
+                            }
+                        ]
+                    },
+                    {
+                        "content": "E-mail: administration@rejsekort.dk",
+                        "polygon": [
+                            207,
+                            3251,
+                            1303,
+                            3270,
+                            1303,
+                            3341,
+                            206,
+                            3327
+                        ],
+                        "spans": [
+                            {
+                                "offset": 407,
+                                "length": 35
+                            }
+                        ]
+                    },
+                    {
+                        "content": "04100507092023174501",
+                        "polygon": [
+                            463,
+                            3432,
+                            1168,
+                            3444,
+                            1167,
+                            3502,
+                            462,
+                            3491
+                        ],
+                        "spans": [
+                            {
+                                "offset": 443,
+                                "length": 20
+                            }
+                        ]
+                    }
+                ],
+                "spans": [
+                    {
+                        "offset": 0,
+                        "length": 463
+                    }
+                ]
+            }
+        ],
+        "styles": [],
+        "documents": [
+            {
+                "docType": "receipt",
+                "boundingRegions": [
+                    {
+                        "pageNumber": 1,
+                        "polygon": [
+                            0,
+                            0,
+                            1908,
+                            0,
+                            1908,
+                            4032,
+                            0,
+                            4032
+                        ]
+                    }
+                ],
+                "fields": {
+                    "CountryRegion": {
+                        "type": "countryRegion",
+                        "valueCountryRegion": "DNK",
+                        "confidence": 0.995
+                    },
+                    "MerchantAddress": {
+                        "type": "address",
+                        "content": "Automatikvej 1, 2860 Søborg.",
+                        "boundingRegions": [
+                            {
+                                "pageNumber": 1,
+                                "polygon": [
+                                    205,
+                                    3149,
+                                    1100,
+                                    3176,
+                                    1098,
+                                    3246,
+                                    203,
+                                    3220
+                                ]
+                            }
+                        ],
+                        "confidence": 0.986,
+                        "spans": [
+                            {
+                                "offset": 378,
+                                "length": 28
+                            }
+                        ],
+                        "valueAddress": {
+                            "houseNumber": "1",
+                            "road": "Automatikvej",
+                            "postalCode": "2860",
+                            "city": "Søborg.",
+                            "streetAddress": "1 Automatikvej"
+                        }
+                    },
+                    "MerchantName": {
+                        "type": "string",
+                        "valueString": "Rejsekort & Rejseplan A/S,",
+                        "content": "Rejsekort & Rejseplan A/S,",
+                        "boundingRegions": [
+                            {
+                                "pageNumber": 1,
+                                "polygon": [
+                                    207,
+                                    3051,
+                                    1023,
+                                    3075,
+                                    1021,
+                                    3149,
+                                    205,
+                                    3125
+                                ]
+                            }
+                        ],
+                        "confidence": 0.952,
+                        "spans": [
+                            {
+                                "offset": 351,
+                                "length": 26
+                            }
+                        ]
+                    },
+                    "ReceiptType": {
+                        "type": "string",
+                        "valueString": "Transportation.Metro",
+                        "confidence": 0.246
+                    },
+                    "Total": {
+                        "type": "currency",
+                        "valueCurrency": {
+                            "currencySymbol": "DKK",
+                            "amount": 280.0,
+                            "currencyCode": "DKK"
+                        },
+                        "content": "DKK\n280.00",
+                        "boundingRegions": [
+                            {
+                                "pageNumber": 1,
+                                "polygon": [
+                                    975,
+                                    2599,
+                                    1494,
+                                    2599,
+                                    1494,
+                                    2660,
+                                    975,
+                                    2660
+                                ]
+                            }
+                        ],
+                        "confidence": 0.988,
+                        "spans": [
+                            {
+                                "offset": 258,
+                                "length": 10
+                            }
+                        ]
+                    },
+                    "TransactionDate": {
+                        "type": "date",
+                        "valueDate": "2023-09-07",
+                        "content": "07-09-2023",
+                        "boundingRegions": [
+                            {
+                                "pageNumber": 1,
+                                "polygon": [
+                                    1139,
+                                    1197,
+                                    1462,
+                                    1192,
+                                    1462,
+                                    1247,
+                                    1139,
+                                    1251
+                                ]
+                            }
+                        ],
+                        "confidence": 0.995,
+                        "spans": [
+                            {
+                                "offset": 8,
+                                "length": 10
+                            }
+                        ]
+                    },
+                    "TransactionTime": {
+                        "type": "time",
+                        "valueTime": "17:45:00",
+                        "content": "17:45",
+                        "boundingRegions": [
+                            {
+                                "pageNumber": 1,
+                                "polygon": [
+                                    1304,
+                                    1280,
+                                    1463,
+                                    1278,
+                                    1463,
+                                    1331,
+                                    1304,
+                                    1333
+                                ]
+                            }
+                        ],
+                        "confidence": 0.995,
+                        "spans": [
+                            {
+                                "offset": 25,
+                                "length": 5
+                            }
+                        ]
+                    }
+                },
+                "confidence": 0.246,
+                "spans": [
+                    {
+                        "offset": 0,
+                        "length": 463
+                    }
+                ]
+            }
+        ],
+        "contentFormat": "text"
+    }
+}

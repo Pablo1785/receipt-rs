@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use chrono::TimeZone;
 use chrono_tz::Europe::Copenhagen;
 use itertools::Itertools as _;
+use serde::Serialize;
 use sqlx::PgPool;
 
 pub mod ocr;
@@ -12,20 +13,18 @@ const BIND_LIMIT: usize = 65535;
 
 pub async fn process_analysis_results(
     file_hash: &str,
-    res: reqwest::Response,
+    analysis_result: AnalyzeResultOperation,
     pool: &PgPool,
 ) -> Result<(), AppError> {
-    let text = res.text().await?;
     sqlx::query!(
         "INSERT INTO raw_results(sha256_digest, result_json) VALUES ($1, $2)",
         file_hash,
-        text
+        serde_json::to_string(&analysis_result)?
     )
     .execute(pool)
     .await?;
     tracing::info!("Successfully cached raw response text in DB. Processing further...");
-    let data: AnalyzeResultOperation = serde_json::from_str(&text)?;
-    save_analysis_data(pool, data, file_hash).await?;
+    save_analysis_data(pool, analysis_result, file_hash).await?;
     tracing::info!("Successfully saved receipt data in database");
     Ok::<(), AppError>(())
 }
@@ -44,9 +43,11 @@ pub async fn save_analysis_data(
         .ok_or(anyhow!("Documents field is present but empty"))?
         .fields
         .clone();
-    let (product_names, (counts, unit_prices)): (Vec<_>, (Vec<_>, Vec<_>)) = receipt_fields
-        .items
-        .value_array
+    let merchant_name = &receipt_fields.merchant_name.value_string;
+    let (product_names, (counts, unit_prices)): (Vec<_>, (Vec<_>, Vec<_>)) = if let None = receipt_fields.items {
+         (vec![merchant_name.clone()], ( vec![1.0], vec![receipt_fields.total.value_currency.amount]))
+    } else {
+        receipt_fields.items.unwrap().value_array
         .iter()
         .filter_map(|item| {
             let Some(unit_price) = item
@@ -54,7 +55,7 @@ pub async fn save_analysis_data(
                 .unit_price
                 .as_ref()
                 .or(item.value_object.total_price.as_ref())
-                .map(|obj| obj.value_number)
+                .map(|obj| obj.value_currency.amount)
             else {
                 // We throw away items where no price was detected
                 return None;
@@ -69,9 +70,8 @@ pub async fn save_analysis_data(
         })
         .into_iter()
         .take(BIND_LIMIT)
-        .unzip();
-
-    let merchant_name = &receipt_fields.merchant_name.value_string;
+        .unzip()
+    };
 
     // Netto receipt date strings detected by analysis API are usually well formatted (YYYY-m-d), but when generating a date value from that the model tends to flip month and day;
     // TODO: For now Netto dates will be a special case, until similar issue is encountered elsewhere
