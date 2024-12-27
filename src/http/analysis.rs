@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{os::linux::raw, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context as _};
 use axum::extract::{FromRef, Multipart, State};
@@ -58,18 +58,25 @@ pub async fn upload(
 
     let pool = &app_state.pool;
 
-    let is_already_analyzed = sqlx::query!(
-        "SELECT * FROM raw_results WHERE sha256_digest = $1",
+    let raw_result = sqlx::query_as!(
+        RawResult,
+        r#"SELECT * FROM raw_results WHERE sha256_digest = $1"#,
         &file_hash
     )
     .fetch_optional(pool)
-    .await?
-    .is_some();
+    .await?;
 
-    if is_already_analyzed {
-        return Err(AppError::Anyhow(anyhow!(
-            "Submitted file's hash is already saved in the DB. Not runnning analysis."
-        )));
+    if let Some(raw_result) = raw_result {
+        let is_already_saved = sqlx::query!(
+            r#"SELECT * FROM receipts WHERE file_sha256 = $1"#,
+            &raw_result.sha256_digest
+        )
+        .fetch_optional(pool)
+        .await?.is_some();
+    
+        if is_already_saved {
+            return Ok(axum::http::StatusCode::ACCEPTED);
+        }
     } else {
         sqlx::query!(
             "INSERT INTO raw_results(result_json, sha256_digest) VALUES ($1, $2)",

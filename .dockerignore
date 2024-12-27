@@ -5,3 +5,4 @@ target
 **/*.txt
 **/.shuttle-storage
 fly.toml
+tests/fixtures
