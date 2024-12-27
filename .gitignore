@@ -3,3 +3,4 @@
 Secrets*.toml
 *.txt
 .shuttle-storage/
+.direnv

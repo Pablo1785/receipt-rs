@@ -22,9 +22,33 @@ mod dev;
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
 
+#[derive(Debug, Clone)]
+pub struct OcrDeps {
+    pub api_key: String,
+    pub endpoint_url: String,
+    pub model_id: String,
+
+}
+
+impl OcrDeps {
+    pub fn try_from_env() -> Result<Self, AppError> {
+
+
+        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
+            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
+
+            let azure_form_recognizer_endpoint_url = std::env::var("AZURE_FORM_RECOGNIZER_ENDPOINT_URL")
+                .context("AZURE_FORM_RECOGNIZER_ENDPOINT_URL env var missing")?;
+
+                let azure_form_recognizer_model_id = std::env::var("AZURE_FORM_RECOGNIZER_MODEL_ID")
+                    .context("AZURE_FORM_RECOGNIZER_MODEL_ID env var missing")?;
+        Ok(OcrDeps { api_key: azure_form_recognizer_api_key, endpoint_url: azure_form_recognizer_endpoint_url, model_id: azure_form_recognizer_model_id })
+    }
+}
+
 pub struct AppDeps {
     pub pool: PgPool,
-    pub azure_form_recognizer_api_key: String,
+    pub ocr: OcrDeps,
     pub client_secret: String,
     pub client: Client,
 }
@@ -37,15 +61,12 @@ impl AppDeps {
             .connect(&database_url)
             .await?;
 
-        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
-            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
-
         let client_secret =
             std::env::var("CLIENT_SECRET").context("CLIENT_SECRET env var missing")?;
 
         let deps = AppDeps {
             pool,
-            azure_form_recognizer_api_key,
+            ocr: OcrDeps::try_from_env()?,
             client_secret,
             client: Client::new(),
         };
@@ -54,15 +75,12 @@ impl AppDeps {
 
     /// This function is used for testing purposes only
     pub async fn try_from_env_and_pool(pool: PgPool) -> Result<Self, AppError> {
-        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
-            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
-
         let client_secret =
             std::env::var("CLIENT_SECRET").context("CLIENT_SECRET env var missing")?;
 
         let deps = AppDeps {
             pool,
-            azure_form_recognizer_api_key,
+            ocr: OcrDeps::try_from_env()?,
             client_secret,
             client: Client::new(),
         };
