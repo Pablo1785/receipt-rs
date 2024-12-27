@@ -2,7 +2,7 @@ use std::{borrow::BorrowMut, collections::HashMap, hash::Hash, path::Path, time:
 
 use axum::{http::{Request, StatusCode}};
 use common::RequestBuilderExt as _;
-use receipt_rs::http::{app, serve, AppDeps, WAIT_BEFORE_ASKING_FOR_RESULTS};
+use receipt_rs::http::{app, serve, AllData, AppDeps, WAIT_BEFORE_ASKING_FOR_RESULTS};
 use reqwest::{multipart::{Form, Part}, Url};
 use serde_json::json;
 use sqlx::PgPool;
@@ -48,7 +48,7 @@ async fn test_upload(client_secret: &str, path: &Path) {
 
     tokio::time::sleep(WAIT_BEFORE_ASKING_FOR_RESULTS + Duration::from_secs(10)).await;
     let client = reqwest::Client::new();
-    let url = Url::parse("http://localhost:8080/download").unwrap();
+    let url = Url::parse("http://localhost:8080/all").unwrap();
     let request = reqwest::Request::new(reqwest::Method::GET, url);
     let resp = reqwest::RequestBuilder::from_parts(client, request)
     .bearer_auth(client_secret)
@@ -57,6 +57,10 @@ async fn test_upload(client_secret: &str, path: &Path) {
     tracing::info!("{:?}", resp);
 
     assert_eq!(resp.status(), StatusCode::OK);
+
+    let rows = resp.json::<Vec<AllData>>().await.unwrap();
+    tracing::info!("{:?}", rows);
+    assert!(!rows.is_empty());
 }
 
 #[sqlx::test]

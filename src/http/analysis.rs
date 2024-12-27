@@ -161,7 +161,7 @@ pub async fn upload(
     Ok(axum::http::StatusCode::ACCEPTED)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AllData {
     pub name: String,
     pub unit_price: f64,

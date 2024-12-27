@@ -10,7 +10,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use dev::{clear_db, repopulate_db_from_cache, show_all_cached};
+use dev::{clear_cache, clear_db, repopulate_db_from_cache, show_all_cached};
 use reqwest::Client;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tower::ServiceBuilder;
@@ -26,7 +26,7 @@ mod analysis;
 mod auth;
 mod dev;
 
-pub use analysis::WAIT_BEFORE_ASKING_FOR_RESULTS;
+pub use analysis::{WAIT_BEFORE_ASKING_FOR_RESULTS, AllData};
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
 
@@ -126,6 +126,7 @@ pub fn app(deps: AppDeps) -> Router {
             "/dev/cache/all",
             get(show_all_cached).with_state(deps.clone()),
         )
+        .route("/dev/cache/all", delete(clear_cache).with_state(deps.clone()))
         .route("/all", get(show_all).with_state(deps.clone()))
         .route(
             "/upload",
