@@ -558,9 +558,12 @@ mod tests {
         tracing_subscriber::registry()
             .with(tracing_subscriber::fmt::layer())
             .init();
-        
-        let img_dir = Path::new(".").parent().expect("Must have a parent dir").join("tests").join("fixtures").join("analysis_results");
-        assert!(img_dir.is_dir(), "{}", img_dir.as_os_str().to_str().unwrap());
+
+        let img_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("analysis_results");
+        assert!(img_dir.is_dir(),);
 
         for entry in img_dir.read_dir().unwrap() {
             let entry = entry.unwrap();
@@ -570,9 +573,11 @@ mod tests {
 
                 let expected_bytes = 1024 * 1024 * 3;
                 let mut buf = Vec::with_capacity(expected_bytes);
-                File::open(path).expect("File open failed").read_to_end(&mut buf).expect("File data read failed");
-                serde_json::from_slice::<super::AnalyzeResultOperation>(&buf)
-                .unwrap();
+                File::open(path)
+                    .expect("File open failed")
+                    .read_to_end(&mut buf)
+                    .expect("File data read failed");
+                serde_json::from_slice::<super::AnalyzeResultOperation>(&buf).unwrap();
             }
         }
     }
