@@ -22,7 +22,7 @@ Intended for use with mobile automation apps like HTTP Shortcuts and Macrodroid.
 
 - simple design for easy integrations:
     - bearer token auth allows to easily connect to the app using mobile automation apps, such as HTTP Shortcuts or Macrodroid
-    - conforms to correct HTTP status codes - not a "500 for everything" approach
+    - conforms to correct HTTP status codes - not a "200 for everything" approach
 
 - non-blocking REST API:
     - uploading a photo schedules a background job, returns success status if job started correctly
