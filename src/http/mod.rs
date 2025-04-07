@@ -142,15 +142,3 @@ pub async fn serve(deps: AppDeps) -> Result<(), AppError> {
         .context("Server must always start listening")?;
     Ok(())
 }
-
-pub async fn handle_app_error(err: AppError) -> (axum::http::StatusCode, String) {
-    match err {
-        error @ _ => {
-            tracing::error!("HTTP client error: {}", error);
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("HTTP client error: {}", error),
-            )
-        }
-    }
-}
