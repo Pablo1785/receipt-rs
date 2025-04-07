@@ -1,6 +1,6 @@
 # Receipt-rs
 
-Simple backend app for quickly storing receipt information.
+Backend app for quickly storing receipt information, with a focus on robustness, flexibility and ease of integration.
 
 Intended for use with mobile automation apps like HTTP Shortcuts and Macrodroid.
 
