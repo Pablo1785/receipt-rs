@@ -8,7 +8,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS test_runner
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
-RUN cargo chef cook --tests --recipe-path recipe.json
+RUN cargo chef cook --release --tests --recipe-path recipe.json
 # Build and run tests
 COPY . .
 RUN cargo test --release 
