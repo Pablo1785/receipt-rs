@@ -16,18 +16,14 @@ RUN cargo test --release
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
-RUN cargo chef cook --release --bin receipt-rs --tests --recipe-path recipe.json
+RUN cargo chef cook --release --bin receipt-rs --recipe-path recipe.json
 # Build application
 COPY . .
-RUN cargo build --release --bin receipt-rs --tests
-
-FROM chef AS test_runner
-COPY --from=builder . .
-RUN cargo test --release
+RUN cargo build --release --bin receipt-rs
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt install -y openssl
 WORKDIR /app
-COPY --from=test_runner /app/target/release/receipt-rs /usr/local/bin
+COPY --from=builder /app/target/release/receipt-rs /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/receipt-rs"]
