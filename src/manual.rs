@@ -551,6 +551,7 @@ pub struct BoundingRegion {
 mod tests {
     use std::{fs::File, io::Read, path::Path};
 
+    use itertools::Itertools;
     use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
     #[test]
@@ -564,10 +565,25 @@ mod tests {
             .join("tests")
             .join("fixtures")
             .join("analysis_results");
+        let dir_contents = Path::new(carg_manifest_dir)
+            .read_dir()
+            .unwrap()
+            .map(|entry| {
+                entry
+                    .unwrap()
+                    .path()
+                    .as_os_str()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect_vec()
+            .join(",\n");
         assert!(
             img_dir.is_dir(),
-            "Img dir does not exist. Cargo dir: {}",
-            carg_manifest_dir
+            "Img dir does not exist. Cargo dir: {}; Dir contents: {}",
+            carg_manifest_dir,
+            dir_contents,
         );
 
         for entry in img_dir.read_dir().unwrap() {
