@@ -560,7 +560,7 @@ mod tests {
             .init();
         
         let img_dir = Path::new(".").parent().expect("Must have a parent dir").join("tests").join("fixtures").join("analysis_results");
-        assert!(img_dir.is_dir());
+        assert!(img_dir.is_dir(), "{}", img_dir.as_os_str().to_str().unwrap());
 
         for entry in img_dir.read_dir().unwrap() {
             let entry = entry.unwrap();
