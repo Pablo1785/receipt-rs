@@ -20,10 +20,14 @@ pub async fn clear_db(State(DbState { pool }): State<DbState>) -> Result<&'stati
     Ok(msg)
 }
 
-pub async fn clear_cache(State(DbState { pool }): State<DbState>) -> Result<&'static str, AppError> {
+pub async fn clear_cache(
+    State(DbState { pool }): State<DbState>,
+) -> Result<&'static str, AppError> {
     let pool = &pool;
     let tx = pool.begin().await?;
-    sqlx::query!("DELETE FROM raw_results").execute(pool).await?;
+    sqlx::query!("DELETE FROM raw_results")
+        .execute(pool)
+        .await?;
     tx.commit().await?;
 
     let msg = "All cached data has been deleted from DB";
