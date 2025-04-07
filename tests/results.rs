@@ -12,6 +12,7 @@ use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _
 
 mod common;
 
+#[cfg(feature = "test_db")]
 #[sqlx::test]
 async fn test_download_csv(db: PgPool) {
     let deps = AppDeps::try_from_env_and_pool(db).await.unwrap();
@@ -63,6 +64,7 @@ async fn test_upload(client_secret: &str, path: &Path) {
     assert!(!rows.is_empty());
 }
 
+#[cfg(feature = "test_db")]
 #[sqlx::test]
 async fn test_upload_images(db: PgPool) {
     tracing_subscriber::registry()
