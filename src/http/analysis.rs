@@ -10,12 +10,12 @@ use sqlx::PgPool;
 use crate::{
     error::AppError,
     service::{
-        ocr::{analyze_file, get_successful_analysis_results},
+        ocr::{analyze_file, get_successful_analysis_results, OcrDeps},
         process_analysis_results,
     },
 };
 
-use super::{AppDeps, DbState, OcrDeps};
+use super::{AppDeps, DbState};
 
 #[derive(Serialize, Deserialize)]
 pub struct RawResult {
@@ -72,8 +72,9 @@ pub async fn upload(
             &raw_result.sha256_digest
         )
         .fetch_optional(pool)
-        .await?.is_some();
-    
+        .await?
+        .is_some();
+
         if is_already_saved {
             return Ok(axum::http::StatusCode::ACCEPTED);
         }
@@ -99,10 +100,7 @@ pub async fn upload(
             Err(err) => {
                 if retries > 0 {
                     retries -= 1;
-                    tracing::info!(
-                        "Analysis failed. Retrying in {} seconds...",
-                        wait_secs
-                    );
+                    tracing::info!("Analysis failed. Retrying in {} seconds...", wait_secs);
                     tokio::time::sleep(Duration::from_secs(wait_secs)).await;
                     wait_secs *= 2;
                 } else {
@@ -132,9 +130,11 @@ pub async fn upload(
             "Missing Operation-Location in response header. This should never happen"
         ))?
         .to_str()
-        .with_context(|| anyhow!(
-            "Could not parse Operation-Location in response header. This should never happen"
-        ))?
+        .with_context(|| {
+            anyhow!(
+                "Could not parse Operation-Location in response header. This should never happen"
+            )
+        })?
         .to_string();
     let msg =
         format!("Successfully queued image analysis. Result will be available at: {result_url}");
@@ -147,9 +147,11 @@ pub async fn upload(
         let mut retries = 3;
         let mut wait_secs = 1;
         let process_res = loop {
-            let res = get_successful_analysis_results(&result_url, &app_state.ocr, &app_state.client).await;
+            let res =
+                get_successful_analysis_results(&result_url, &app_state.ocr, &app_state.client)
+                    .await;
             tracing::info!("Received response from API. Processing...");
-             match res {
+            match res {
                 Ok(success_res) => {
                     break process_analysis_results(&file_hash, success_res, &app_state.pool).await
                 }
@@ -162,12 +164,12 @@ pub async fn upload(
                         );
                         tokio::time::sleep(Duration::from_secs(wait_secs)).await;
                         wait_secs *= 2;
-                    },
+                    }
                     err @ _ => break Err(err.into()),
                 },
             };
         };
-        
+
         if let Err(err) = process_res {
             tracing::error!(
                 "Error when processing analysis results: {}",

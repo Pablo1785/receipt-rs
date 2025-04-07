@@ -7,9 +7,36 @@ use serde::{Deserialize, Serialize};
 use serde_json::{error, json};
 use thiserror::Error;
 
-use crate::http::OcrDeps;
-
 use super::api_types::{AnalyzeResultOperation, DocumentIntelligenceOperationStatus};
+#[derive(Debug, Clone)]
+pub struct OcrDeps {
+    pub api_key: String,
+    pub endpoint_url: String,
+    pub model_id: String,
+    pub api_version: String,
+}
+
+impl OcrDeps {
+    pub fn try_from_env() -> Result<Self, anyhow::Error> {
+        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
+            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
+
+        let azure_form_recognizer_endpoint_url =
+            std::env::var("AZURE_FORM_RECOGNIZER_ENDPOINT_URL")
+                .context("AZURE_FORM_RECOGNIZER_ENDPOINT_URL env var missing")?;
+
+        let azure_form_recognizer_model_id = std::env::var("AZURE_FORM_RECOGNIZER_MODEL_ID")
+            .context("AZURE_FORM_RECOGNIZER_MODEL_ID env var missing")?;
+        let azure_form_recognizer_api_version = std::env::var("AZURE_FORM_RECOGNIZER_API_VERSION")
+            .context("AZURE_FORM_RECOGNIZER_API_VERSION env var missing")?;
+        Ok(OcrDeps {
+            api_key: azure_form_recognizer_api_key,
+            endpoint_url: azure_form_recognizer_endpoint_url,
+            model_id: azure_form_recognizer_model_id,
+            api_version: azure_form_recognizer_api_version,
+        })
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct AnalyzeRequestBody {

@@ -20,45 +20,15 @@ use tower_http::{
 };
 use tracing::{debug_span, error_span, info_span, Span};
 
-use crate::error::AppError;
+use crate::{error::AppError, service::ocr::OcrDeps};
 
 mod analysis;
 mod auth;
 mod dev;
 
-pub use analysis::{WAIT_BEFORE_ASKING_FOR_RESULTS, AllData};
+pub use analysis::{AllData, WAIT_BEFORE_ASKING_FOR_RESULTS};
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 10; // 10 MB
-
-#[derive(Debug, Clone)]
-pub struct OcrDeps {
-    pub api_key: String,
-    pub endpoint_url: String,
-    pub model_id: String,
-    pub api_version: String,
-}
-
-impl OcrDeps {
-    pub fn try_from_env() -> Result<Self, AppError> {
-        let azure_form_recognizer_api_key = std::env::var("AZURE_FORM_RECOGNIZER_KEY")
-            .context("AZURE_FORM_RECOGNIZER_KEY env var missing")?;
-
-        let azure_form_recognizer_endpoint_url =
-            std::env::var("AZURE_FORM_RECOGNIZER_ENDPOINT_URL")
-                .context("AZURE_FORM_RECOGNIZER_ENDPOINT_URL env var missing")?;
-
-        let azure_form_recognizer_model_id = std::env::var("AZURE_FORM_RECOGNIZER_MODEL_ID")
-            .context("AZURE_FORM_RECOGNIZER_MODEL_ID env var missing")?;
-        let azure_form_recognizer_api_version = std::env::var("AZURE_FORM_RECOGNIZER_API_VERSION")
-            .context("AZURE_FORM_RECOGNIZER_API_VERSION env var missing")?;
-        Ok(OcrDeps {
-            api_key: azure_form_recognizer_api_key,
-            endpoint_url: azure_form_recognizer_endpoint_url,
-            model_id: azure_form_recognizer_model_id,
-            api_version: azure_form_recognizer_api_version,
-        })
-    }
-}
 
 pub struct AppDeps {
     pub pool: PgPool,
@@ -82,9 +52,7 @@ impl AppDeps {
             pool,
             ocr: OcrDeps::try_from_env()?,
             client_secret,
-            client: ClientBuilder::new()
-                .use_rustls_tls()
-                .build()?,
+            client: ClientBuilder::new().use_rustls_tls().build()?,
         };
         Ok(deps)
     }
@@ -128,7 +96,10 @@ pub fn app(deps: AppDeps) -> Router {
             "/dev/cache/all",
             get(show_all_cached).with_state(deps.clone()),
         )
-        .route("/dev/cache/all", delete(clear_cache).with_state(deps.clone()))
+        .route(
+            "/dev/cache/all",
+            delete(clear_cache).with_state(deps.clone()),
+        )
         .route("/all", get(show_all).with_state(deps.clone()))
         .route(
             "/upload",
