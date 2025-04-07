@@ -7,10 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{error, json};
 use thiserror::Error;
 
-use crate::{
-    http::OcrDeps,
-    manual::{AnalyzeResultOperation, DocumentIntelligenceOperationStatus},
-};
+use crate::http::OcrDeps;
+
+use super::api_types::{AnalyzeResultOperation, DocumentIntelligenceOperationStatus};
 
 #[derive(Serialize, Deserialize)]
 pub struct AnalyzeRequestBody {
@@ -67,9 +66,7 @@ pub async fn get_successful_analysis_results(
         DocumentIntelligenceOperationStatus::Succeeded => Ok(parsed),
         DocumentIntelligenceOperationStatus::Running
         | DocumentIntelligenceOperationStatus::Skipped
-        | DocumentIntelligenceOperationStatus::NotStarted => {
-            Err(AnalysisError::InProgress)
-        }
+        | DocumentIntelligenceOperationStatus::NotStarted => Err(AnalysisError::InProgress),
         DocumentIntelligenceOperationStatus::Failed
         | DocumentIntelligenceOperationStatus::Canceled => Err(AnalysisError::Canceled),
     }

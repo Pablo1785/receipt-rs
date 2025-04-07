@@ -3,5 +3,4 @@ pub mod error;
 
 pub mod http;
 
-mod manual;
 mod service;

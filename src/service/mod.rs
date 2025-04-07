@@ -1,11 +1,13 @@
-use crate::{error::AppError, manual::AnalyzeResultOperation};
+use crate::error::AppError;
 use anyhow::anyhow;
+use api_types::AnalyzeResultOperation;
 use chrono::TimeZone;
 use chrono_tz::Europe::Copenhagen;
 use itertools::Itertools as _;
 use serde::Serialize;
 use sqlx::PgPool;
 
+mod api_types;
 pub mod ocr;
 
 // Postgres maximum number of parameters in a statement
@@ -44,34 +46,41 @@ pub async fn save_analysis_data(
         .fields
         .clone();
     let merchant_name = &receipt_fields.merchant_name.value_string;
-    let (product_names, (counts, unit_prices)): (Vec<_>, (Vec<_>, Vec<_>)) = if let None = receipt_fields.items {
-         (vec![merchant_name.clone()], ( vec![1.0], vec![receipt_fields.total.value_currency.amount]))
-    } else {
-        receipt_fields.items.unwrap().value_array
-        .iter()
-        .filter_map(|item| {
-            let Some(unit_price) = item
-                .value_object
-                .unit_price
-                .as_ref()
-                .or(item.value_object.total_price.as_ref())
-                .map(|obj| obj.value_currency.amount)
-            else {
-                // We throw away items where no price was detected
-                return None;
-            };
-            let name = item.value_object.description.value_string.clone();
-            let count = if let Some(q) = &item.value_object.quantity {
-                q.value_number
-            } else {
-                1.0
-            };
-            Some((name, (count, unit_price)))
-        })
-        .into_iter()
-        .take(BIND_LIMIT)
-        .unzip()
-    };
+    let (product_names, (counts, unit_prices)): (Vec<_>, (Vec<_>, Vec<_>)) =
+        if let None = receipt_fields.items {
+            (
+                vec![merchant_name.clone()],
+                (vec![1.0], vec![receipt_fields.total.value_currency.amount]),
+            )
+        } else {
+            receipt_fields
+                .items
+                .unwrap()
+                .value_array
+                .iter()
+                .filter_map(|item| {
+                    let Some(unit_price) = item
+                        .value_object
+                        .unit_price
+                        .as_ref()
+                        .or(item.value_object.total_price.as_ref())
+                        .map(|obj| obj.value_currency.amount)
+                    else {
+                        // We throw away items where no price was detected
+                        return None;
+                    };
+                    let name = item.value_object.description.value_string.clone();
+                    let count = if let Some(q) = &item.value_object.quantity {
+                        q.value_number
+                    } else {
+                        1.0
+                    };
+                    Some((name, (count, unit_price)))
+                })
+                .into_iter()
+                .take(BIND_LIMIT)
+                .unzip()
+        };
 
     // Netto receipt date strings detected by analysis API are usually well formatted (YYYY-m-d), but when generating a date value from that the model tends to flip month and day;
     // TODO: For now Netto dates will be a special case, until similar issue is encountered elsewhere
