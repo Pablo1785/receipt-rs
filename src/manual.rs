@@ -559,11 +559,16 @@ mod tests {
             .with(tracing_subscriber::fmt::layer())
             .init();
 
-        let img_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let carg_manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let img_dir = Path::new(carg_manifest_dir)
             .join("tests")
             .join("fixtures")
             .join("analysis_results");
-        assert!(img_dir.is_dir(),);
+        assert!(
+            img_dir.is_dir(),
+            "Img dir does not exist. Cargo dir: {}",
+            carg_manifest_dir
+        );
 
         for entry in img_dir.read_dir().unwrap() {
             let entry = entry.unwrap();
