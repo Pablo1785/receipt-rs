@@ -1,14 +1,13 @@
-use std::{borrow::BorrowMut, collections::HashMap, hash::Hash, path::Path, time::Duration};
+use std::{path::Path, time::Duration};
 
-use axum::{http::{Request, StatusCode}};
+use axum::http::StatusCode;
 use common::RequestBuilderExt as _;
-use receipt_rs::http::{app, serve, AllData, AppDeps, WAIT_BEFORE_ASKING_FOR_RESULTS};
-use reqwest::{multipart::{Form, Part}, Url};
-use serde_json::json;
-use sqlx::PgPool;
+use receipt_rs::http::{AllData, WAIT_BEFORE_ASKING_FOR_RESULTS};
+use reqwest::{
+    multipart::{Form, Part},
+    Url,
+};
 use tokio::{fs::File, io::AsyncReadExt};
-use tower::ServiceExt;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 mod common;
 
@@ -23,7 +22,14 @@ async fn test_download_csv(db: PgPool) {
     let resp1 = app
         .borrow_mut()
         // We handle JSON objects directly to sanity check the serialization and deserialization
-        .oneshot(Request::get("/download").header(axum::http::header::AUTHORIZATION, format!("Bearer {}", client_secret)).empty_body())
+        .oneshot(
+            Request::get("/download")
+                .header(
+                    axum::http::header::AUTHORIZATION,
+                    format!("Bearer {}", client_secret),
+                )
+                .empty_body(),
+        )
         .await
         .unwrap();
 
@@ -37,14 +43,21 @@ async fn test_upload(client_secret: &str, path: &Path) {
 
     let expected_bytes = 1024 * 1024 * 3;
     let mut buf = Vec::with_capacity(expected_bytes);
-    File::open(path).await.expect("File open failed").read_to_end(&mut buf).await.expect("File data read failed");
+    File::open(path)
+        .await
+        .expect("File open failed")
+        .read_to_end(&mut buf)
+        .await
+        .expect("File data read failed");
     let resp = reqwest::RequestBuilder::from_parts(client, request)
-    .bearer_auth(&client_secret)
-    .multipart(Form::new().part("receipt_photo", Part::bytes(buf)))
-    .send().await.unwrap();
+        .bearer_auth(&client_secret)
+        .multipart(Form::new().part("receipt_photo", Part::bytes(buf)))
+        .send()
+        .await
+        .unwrap();
 
     tracing::info!("{:?}", resp);
-    
+
     assert_eq!(resp.status(), StatusCode::ACCEPTED);
 
     tokio::time::sleep(WAIT_BEFORE_ASKING_FOR_RESULTS + Duration::from_secs(10)).await;
@@ -52,8 +65,10 @@ async fn test_upload(client_secret: &str, path: &Path) {
     let url = Url::parse("http://localhost:8080/all").unwrap();
     let request = reqwest::Request::new(reqwest::Method::GET, url);
     let resp = reqwest::RequestBuilder::from_parts(client, request)
-    .bearer_auth(client_secret)
-    .send().await.unwrap();
+        .bearer_auth(client_secret)
+        .send()
+        .await
+        .unwrap();
 
     tracing::info!("{:?}", resp);
 
@@ -70,7 +85,7 @@ async fn test_upload_images(db: PgPool) {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .init();
-    
+
     let deps = AppDeps::try_from_env_and_pool(db).await.unwrap();
     let client_secret = deps.client_secret.clone();
     tokio::spawn(serve(deps));

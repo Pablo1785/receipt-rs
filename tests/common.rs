@@ -1,10 +1,8 @@
 // This is imported by different tests that use different functions.
 #![allow(dead_code)]
 
-use axum::body::{Body, HttpBody};
-use axum::http::header::CONTENT_TYPE;
+use axum::body::Body;
 use axum::http::{request, Request};
-use axum::response::Response;
 
 pub trait RequestBuilderExt {
     fn json(self, json: serde_json::Value) -> Request<Body>;

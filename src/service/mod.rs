@@ -4,7 +4,6 @@ use api_types::AnalyzeResultOperation;
 use chrono::TimeZone;
 use chrono_tz::Europe::Copenhagen;
 use itertools::Itertools as _;
-use serde::Serialize;
 use sqlx::PgPool;
 
 mod api_types;

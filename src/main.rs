@@ -17,10 +17,13 @@ async fn run() -> Result<(), AppError> {
 
 fn main() {
     let sentry_dsn = std::env::var("SENTRY_DSN").expect("SENTRY_DSN env var missing");
-    let _guard = sentry::init((sentry_dsn, sentry::ClientOptions {
-        release: sentry::release_name!(),
-        ..Default::default()
-    }));
+    let _guard = sentry::init((
+        sentry_dsn,
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            ..Default::default()
+        },
+    ));
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -28,5 +31,4 @@ fn main() {
         .unwrap()
         .block_on(run())
         .unwrap();
-
 }

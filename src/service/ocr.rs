@@ -4,7 +4,7 @@ use reqwest::{
     Client, Response,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{error, json};
+use serde_json::json;
 use thiserror::Error;
 
 use super::api_types::{AnalyzeResultOperation, DocumentIntelligenceOperationStatus};

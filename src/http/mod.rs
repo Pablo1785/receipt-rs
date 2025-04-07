@@ -1,24 +1,18 @@
-use std::{any::Any, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use analysis::{download, show_all, upload};
 use anyhow::Context as _;
 use axum::{
-    error_handling::HandleErrorLayer,
     extract::{DefaultBodyLimit, FromRef, MatchedPath},
     http::Request,
-    response::Response,
     routing::{delete, get, post, put},
     Router,
 };
 use dev::{clear_cache, clear_db, repopulate_db_from_cache, show_all_cached};
 use reqwest::{Client, ClientBuilder};
 use sqlx::{postgres::PgPoolOptions, PgPool};
-use tower::ServiceBuilder;
-use tower_http::{
-    classify::ServerErrorsFailureClass,
-    trace::{DefaultOnFailure, OnFailure as _, TraceLayer},
-};
-use tracing::{debug_span, error_span, info_span, Span};
+use tower_http::trace::{OnFailure as _, TraceLayer};
+use tracing::debug_span;
 
 use crate::{error::AppError, service::ocr::OcrDeps};
 
